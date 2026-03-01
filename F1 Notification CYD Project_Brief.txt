@@ -1,0 +1,81 @@
+# CYD ESP32 F1 Notification Project Brief
+
+## Hardware
+
+### Main Board
+- Board: ESP32-2432S028 (2.8" CYD) (DEFAULT and starting point for project) and ESP32-2432S024 (2.4") / configurable to ESP32 Board with attached user display
+
+### Sensors
+- None
+
+### Other Hardware
+- possible in future add additional displays and/or sensors
+
+## Features
+
+Model some of the features from https://github.com/witnessmenow/F1-Arduino-Notifications, specifically the telegram notification
+Display the F1 Race Schedule on the week of the race meeting as well as sent a notification to Telegram
+Race information is available from https://github.com/sportstimes/f1/blob/main/_db/f1/2026.json
+Further Information available at https://www.formula1.com/en/racing/2026 and https://calendar.formula1.com/ 
+On the Display produce something like this based on locally set TZ:
+
+┌───────────────────────────────────────┐
+│           F1 RACE SCHEDULE            │
+│      Sunday, 08 Mar 2026 - 15:00      │
+├───────────────────────────────────────┤
+│  Next Race: Australian                │
+├─────────────────────┬────────┬────────┤
+│  SESSION            │  DAY   │  TIME  │
+├─────────────────────┼────────┼────────┤
+│  Free Practice 1    │  Fri   │  12:30 │
+│  Free Practice 2    │  Fri   │  16:00 │
+│  Free Practice 3    │  Sat   │  12:30 │
+│  Qualifying         │  Sat   │  16:00 │
+│  Race               │  Sun   │  15:00 │
+└─────────────────────┴────────┴────────┘
+and for the week preceding the race put a large Digit counting down the days to the First Session switching the display between the day count and the schedule as above
+Once Race Day is over then start countdown to the next race
+
+### Web Configuration Interface
+Settings to expose:
+- [X] WiFi credentials
+- [X] Timezone / NTP server
+- [X] Display brightness
+- [X] Telegram API / Chat ID Input
+
+Interface style: [Simple HTML / styled / minimal API-only]
+
+### OTA Updates
+- Method preference: ArduinoOTA and option for custom web upload
+- Password protected: [No]
+
+### WiFi
+- Initial setup: [WiFiManager captive portal]
+- Fallback AP mode: [Yes]
+
+## Preferences
+
+### Libraries
+- Display: [TFT_eSPI]
+- Web server: [no preference]
+- Config storage: [no preference]
+- Other libraries to use: https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot 
+- Libraries to avoid: [none]
+
+### Code Style
+- Single main.cpp or split into modules: [single file]
+- Configuration approach: [config.h defines]
+- Include .h in folder
+- images in /images folder
+- documentation in /docs
+
+### Development
+- PlatformIO: Yes
+- Git repo structure: [standard]
+- Target framework: [Arduino]
+
+## Display Layout
+
+## Anything Else
+- Post Race for next 7 days display winner of Race, Individual and manufacturer leaderboard
+- Display track layout
