@@ -2,7 +2,13 @@
 
 F1 race-week display and notification firmware for the **ESP32-2432S028R (Cheap Yellow Display)**.
 
+I have to start by recognising the great work by @witnessmenow with https://github.com/witnessmenow/F1-Arduino-Notifications.  I started this project out with a Fork to "modernise" and add some features that I wanted but hit a wall so started afresh with a project brief and ask my good friend Claude.ai to get started.  This is what we now have, still more to do, but I'm happy with the little CYD on my desk keeping me updated!
+
+I need to get the documentation updated on setting up Telegram (which I think all works ok!)
+
 The device shows upcoming F1 sessions, race-week countdown, and post-race data on the 320x240 TFT, with optional Telegram alerts and a local web UI for configuration + OTA updates.
+
+![Telegram Message](./images/Telegram.jpg)
 
 ## What It Does
 
@@ -14,7 +20,7 @@ The device shows upcoming F1 sessions, race-week countdown, and post-race data o
 - Sends Telegram notifications (race week, pre-session, result)
 - Serves local config/status UI and OTA firmware update page
 - Captures live TFT screenshots to MicroSD as BMP files
-
+  
 ## Hardware
 
 - Board: ESP32-2432S028R (2.8" ILI9341 touch TFT)
@@ -142,7 +148,7 @@ Touch input manually advances to the next state in the active phase.
 
 ## Telegram Notifications
 
-Enabled when bot token + chat ID are configured.
+Enabled when bot token + chat ID are configured (see details in TELEGRAM_SETUP.md)
 
 Notification types:
 
