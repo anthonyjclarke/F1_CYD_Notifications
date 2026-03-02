@@ -19,6 +19,7 @@
 #include "display_renderer.h"
 #include "display_states.h"
 #include "telegram_handler.h"
+#include "screenshot_capture.h"
 #include "web_server.h"
 #include "f1_logo.h"
 
@@ -121,69 +122,96 @@ void setup() {
     DBG_INFO("=== F1 CYD Notifications ===");
     DBG_INFO("[Main] Debug level: %d", debugLevel);
 
-    // 1. Init display and show splash
-    DBG_INFO("[Main] 1/11 Initializing display");
+    // 1. Init display
+    DBG_INFO("[Main] 1/12 Initializing display");
     initDisplay();
-    drawSplashScreen();
 
-    // 2. Init LED
-    DBG_INFO("[Main] 2/11 Initializing LED");
+    // 2. Init screenshot capture (must be ready before startup captures)
+    DBG_INFO("[Main] 2/12 Initializing screenshot capture");
+#if SCREENSHOT_BUTTON_ENABLED
+    initScreenshotCapture(PIN_SD_CS, PIN_SHOT_BTN);
+#else
+    initScreenshotCapture(PIN_SD_CS, -1);
+#endif
+
+    // 3. Show splash
+    DBG_INFO("[Main] 3/12 Drawing splash screen");
+    drawSplashScreen();
+#if SCREENSHOT_STARTUP_CAPTURES
+    captureScreenshotNow("boot_splash");
+#endif
+
+    // 4. Init LED
+    DBG_INFO("[Main] 4/12 Initializing LED");
     initLED();
     setLED(false, false, true);  // Blue = connecting
 
-    // 3. Init LittleFS and load config
-    DBG_INFO("[Main] 3/11 Mounting filesystem and loading config");
+    // 5. Init LittleFS and load config
+    DBG_INFO("[Main] 5/12 Mounting filesystem and loading config");
     initStorage();
     loadConfig(appConfig);
 
-    // 4. Apply brightness
-    DBG_INFO("[Main] 4/11 Applying brightness: %d", appConfig.brightness);
+    // 6. Apply brightness
+    DBG_INFO("[Main] 6/12 Applying brightness: %d", appConfig.brightness);
     updateBrightness(appConfig.brightness);
 
-    // 5. Connect WiFi (blocks until connected or restarts)
-    DBG_INFO("[Main] 5/11 Starting WiFi");
+    // 7. Connect WiFi (blocks until connected or restarts)
+    DBG_INFO("[Main] 7/12 Starting WiFi");
     setupWiFi(appConfig);
     setLED(false, true, false);  // Green = connected
 
-    // 6. Sync NTP time
-    DBG_INFO("[Main] 6/11 Syncing NTP time (TZ: %s)", appConfig.timezone);
+    // 8. Sync NTP time
+    DBG_INFO("[Main] 8/12 Syncing NTP time (TZ: %s)", appConfig.timezone);
     drawStatusMessage("Syncing time...", 6);
+#if SCREENSHOT_STARTUP_CAPTURES
+    captureScreenshotNow("boot_sync_time");
+#endif
     if (!initTime(appConfig.timezone, appConfig.ntpServer)) {
         DBG_WARN("[Main] Time sync failed - continuing without NTP");
     }
 
-    // 7. Fetch F1 schedule
-    DBG_INFO("[Main] 7/11 Fetching F1 schedule");
+    // 9. Fetch F1 schedule
+    DBG_INFO("[Main] 9/12 Fetching F1 schedule");
     drawStatusMessage("Loading F1 schedule...", 6);
+#if SCREENSHOT_STARTUP_CAPTURES
+    captureScreenshotNow("boot_loading_schedule");
+#endif
     if (!fetchSchedule()) {
         DBG_WARN("[Main] Schedule fetch failed, trying cache");
         if (!loadScheduleFromCache()) {
             DBG_ERROR("[Main] No schedule data available");
             drawStatusMessage("No schedule data available", 6);
+#if SCREENSHOT_STARTUP_CAPTURES
+            captureScreenshotNow("boot_no_schedule_data");
+#endif
             delay(2000);
         }
     }
     lastScheduleFetch = millis();
 
-    // 8. Init Telegram
-    DBG_INFO("[Main] 8/11 Telegram: %s", appConfig.telegramEnabled ? "enabled" : "disabled");
+    // 10. Init Telegram
+    DBG_INFO("[Main] 10/12 Telegram: %s", appConfig.telegramEnabled ? "enabled" : "disabled");
     if (appConfig.telegramEnabled) {
         initTelegram(appConfig.botToken);
     }
 
-    // 9. Start web server + OTA
-    DBG_INFO("[Main] 9/11 Starting web server");
+    // 11. Start web server + OTA
+    DBG_INFO("[Main] 11/12 Starting web server");
     setupWebServer(appConfig);
 
-    // 10. Init touch
-    DBG_INFO("[Main] 10/11 Initializing touch");
+    // 12. Init touch
+    DBG_INFO("[Main] 12/12 Initializing touch");
     initTouch();
 
-    // 11. Ready
+    // Ready
     setLED(false, false, false);  // LED off
     requestRedraw();
+#if SCREENSHOT_STARTUP_CAPTURES
+    updateDisplay(getCurrentRace());  // Ensure current UI frame is rendered before capture
+    captureScreenshotNow("boot_ready");
+#endif
 
-    DBG_INFO("[Main] 11/11 Setup complete");
+    DBG_INFO("[Main] 12/12 Setup complete");
     DBG_INFO("[Main] Free heap: %u bytes", ESP.getFreeHeap());
     DBG_INFO("[Main] IP: %s", WiFi.localIP().toString().c_str());
 }
@@ -200,6 +228,10 @@ void loop() {
 
     // Display update (handles state machine + rendering)
     updateDisplay(getCurrentRace());
+
+    // Screenshot triggers and queued capture execution
+    pollScreenshotButton();
+    handleScreenshotRequests();
 
     // Periodic tasks (all non-blocking, millis-based)
 

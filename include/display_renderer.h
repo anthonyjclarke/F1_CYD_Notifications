@@ -55,7 +55,9 @@ void drawSplashScreen() {
     tft.setFreeFont(&FreeSans9pt7b);
     tft.setTextColor(COLOR_SESSION_TEXT);
     tft.drawString("Connecting to WiFi...", SCREEN_WIDTH / 2, 148);
-    tft.drawString("v0.2.0", SCREEN_WIDTH / 2, 220);
+    char verBuf[24];
+    snprintf(verBuf, sizeof(verBuf), "v%s", APP_VERSION);
+    tft.drawString(verBuf, SCREEN_WIDTH / 2, 220);
 }
 
 // --- Schedule Table ---

@@ -15,16 +15,18 @@ The device:
 ### 2.1 Boot and Initialization Flow
 On boot, the firmware performs this sequence:
 1. Initialize serial logging.
-2. Initialize TFT and render splash screen.
-3. Initialize RGB status LED (active-low).
-4. Mount LittleFS and load config from `/config.json` (or defaults if missing/invalid).
-5. Apply configured brightness.
-6. Connect Wi-Fi via WiFiManager captive portal (`F1-Display`, 180s timeout). Reboots on failure.
-7. Sync NTP/timezone (`initTime`).
-8. Fetch F1 schedule from network; fallback to cached schedule from `/races.json`.
-9. Initialize Telegram client if enabled.
-10. Start Async web server + ElegantOTA.
-11. Initialize touch input, clear LED, trigger first display render.
+2. Initialize TFT.
+3. Initialize screenshot subsystem (MicroSD + optional button trigger).
+4. Render splash screen.
+5. Initialize RGB status LED (active-low).
+6. Mount LittleFS and load config from `/config.json` (or defaults if missing/invalid).
+7. Apply configured brightness.
+8. Connect Wi-Fi via WiFiManager captive portal (`F1-Display`, 180s timeout). Reboots on failure.
+9. Sync NTP/timezone (`initTime`).
+10. Fetch F1 schedule from network; fallback to cached schedule from `/races.json`.
+11. Initialize Telegram client if enabled.
+12. Start Async web server + ElegantOTA.
+13. Initialize touch input, clear LED, trigger first display render.
 
 ### 2.2 Data Sources and Race Model
 - Schedule source: `https://raw.githubusercontent.com/sportstimes/f1/main/_db/f1/2026.json`
@@ -114,6 +116,17 @@ Endpoints:
 - `GET /api/races` compact upcoming season list.
 - `GET /api/debug` get runtime debug level.
 - `POST /api/debug` set runtime debug level (0-4).
+- `POST /api/screenshot` queue screenshot capture.
+
+### 2.8 Screenshot Capture
+- Saves TFT captures as 24-bit BMP files to SD folder `/shots`.
+- Trigger sources:
+  - Web endpoint (`POST /api/screenshot`)
+  - Optional physical button (`PIN_SHOT_BTN`, active LOW, debounce)
+  - Optional startup capture points controlled by `SCREENSHOT_STARTUP_CAPTURES`
+- Naming behavior:
+  - Time synced: `shot_YYYYMMDD_HHMMSS.bmp` (user timezone)
+  - Time unsynced: `shot_unsynced_XXXXXX.bmp`
 
 ## 3. Operational Specification
 

@@ -12,6 +12,25 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ## [Unreleased]
 
+### Added
+- SD screenshot capture subsystem (`include/screenshot_capture.h`) with:
+  - Web trigger endpoint `POST /api/screenshot`
+  - Optional GPIO button trigger (`PIN_SHOT_BTN`, debounce)
+  - Optional startup capture points controlled by `SCREENSHOT_STARTUP_CAPTURES`
+  - 24-bit BMP output to `/shots`
+- Dedicated HSPI wiring for SD screenshot path:
+  - `PIN_SD_CS`, `PIN_SD_SCK`, `PIN_SD_MISO`, `PIN_SD_MOSI`
+
+### Changed
+- Screenshot capture robustness:
+  - Chunked TFT readback (16-row strips) to reduce RAM pressure
+  - Color correction for TFT readback byte-order
+  - Timestamp-based filenames after time sync
+  - Explicit unsynced fallback filenames (`shot_unsynced_XXXXXX.bmp`)
+  - File timestamp metadata stamping via `utime()` fallback path
+- Splash version string now uses `APP_VERSION` from `config.h` (removed hardcoded `v0.2.0`)
+- Documentation synchronized with current startup flow and screenshot behavior (`README.md`, `CLAUDE.md`, `FUNCTIONAL_OPERATIONAL_SPEC.md`)
+
 ### Planned
 - Track circuit XBM images for all 24 2026 rounds
 - Touch calibration tuning on hardware
@@ -22,6 +41,8 @@ Version scheme: `MAJOR.MINOR.PATCH`
 - Double-reset detection to clear WiFi credentials (e.g. ESP_DoubleResetDetector)
 - Season rollover: update `SCHEDULE_URL` and `JOLPICA_BASE_URL` year
 - End-to-end hardware test and display calibration
+- Remove unused `getNextRace()` or wire it into active flow
+- Send Telegram notification when Telegram config is updated from Web UI/manual action
 
 ---
 

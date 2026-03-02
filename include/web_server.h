@@ -12,6 +12,7 @@
 #include "f1_logo.h"
 #include "time_utils.h"
 #include "display_renderer.h"
+#include "screenshot_capture.h"
 
 static AsyncWebServer server(WEB_SERVER_PORT);
 static AppConfig* _webConfigPtr = nullptr;
@@ -123,6 +124,7 @@ td.cd{font-variant-numeric:tabular-nums;color:#666;font-size:0.8em;white-space:n
 <div class="info">
 <strong>Links:</strong><br>
 <a href="/update">Firmware Update (OTA)</a><br><br>
+<button type="button" class="btn-sm" onclick="captureShot()">Capture TFT Screenshot</button><br><br>
 <strong>Status:</strong><br>
 Free Heap: <span id="heap">-</span><br>
 Uptime: <span id="uptime">-</span>
@@ -213,6 +215,24 @@ async function setDbg() {
   try {
     await fetch('/api/debug', {method:'POST', body: new URLSearchParams({level: $('dbg').value})});
   } catch(e) {}
+}
+
+async function captureShot() {
+  const msg = $('msg');
+  try {
+    const r = await fetch('/api/screenshot', {method:'POST'});
+    const d = await r.json();
+    msg.className = r.ok ? 'msg ok' : 'msg err';
+    msg.textContent = r.ok
+      ? ('Screenshot queued: ' + (d.path || '(writing...)'))
+      : (d.error || 'Screenshot failed');
+    msg.style.display = 'block';
+  } catch(e) {
+    msg.className = 'msg err';
+    msg.textContent = 'Screenshot error: ' + e.message;
+    msg.style.display = 'block';
+  }
+  setTimeout(() => msg.style.display = 'none', 3500);
 }
 
 $('configForm').onsubmit = async (e) => {
@@ -479,6 +499,34 @@ void setupWebServer(AppConfig& cfg) {
         serializeJson(doc, json);
         request->send(200, "application/json", json);
     });
+
+#if SCREENSHOT_WEB_ENABLED
+    // POST screenshot capture request (queued for loop execution)
+    server.on("/api/screenshot", HTTP_POST, [](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+
+        if (!isScreenshotReady()) {
+            doc["ok"] = false;
+            doc["error"] = "SD not ready";
+            String json;
+            serializeJson(doc, json);
+            request->send(503, "application/json", json);
+            return;
+        }
+
+        bool queued = requestScreenshot("web");
+        doc["ok"] = queued;
+        doc["queued"] = queued;
+        doc["path"] = getLastScreenshotPath();
+        doc["lastError"] = getLastScreenshotError();
+        if (!queued) {
+            doc["error"] = "Queue failed";
+        }
+        String json;
+        serializeJson(doc, json);
+        request->send(queued ? 200 : 500, "application/json", json);
+    });
+#endif
 
     // ElegantOTA
     ElegantOTA.begin(&server);
