@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "types.h"
+#include "debug.h"
 #include "time_utils.h"
 #include "display_renderer.h"
 #include "f1_data.h"
@@ -10,10 +11,26 @@
 static DisplayState currentDisplayState = STATE_IDLE;
 static unsigned long lastDisplayChange = 0;
 static bool displayNeedsRedraw = true;
+static bool displayPartialUpdate = false;  // true = only countdown digits need refresh
 
-// Force a redraw on next update
+// Human-readable state name for debug output
+static const char* stateName(DisplayState s) {
+    switch (s) {
+        case STATE_IDLE:                   return "IDLE";
+        case STATE_RACE_WEEK_COUNTDOWN:    return "RACE_WEEK_COUNTDOWN";
+        case STATE_RACE_WEEK_SCHEDULE:     return "RACE_WEEK_SCHEDULE";
+        case STATE_RACE_WEEK_TRACK:        return "RACE_WEEK_TRACK";
+        case STATE_POST_RACE_WINNER:       return "POST_RACE_WINNER";
+        case STATE_POST_RACE_DRIVERS:      return "POST_RACE_DRIVERS";
+        case STATE_POST_RACE_CONSTRUCTORS: return "POST_RACE_CONSTRUCTORS";
+        default:                           return "UNKNOWN";
+    }
+}
+
+// Force a full redraw on next update
 void requestRedraw() {
     displayNeedsRedraw = true;
+    displayPartialUpdate = false;
 }
 
 // Determine what phase we're in based on current time and race data
@@ -38,6 +55,8 @@ DisplayState determinePhase(RaceData& race) {
 
 // Advance to next display state within the current phase
 void advanceDisplayState(DisplayState phase) {
+    DisplayState prev = currentDisplayState;
+
     switch (phase) {
         case STATE_RACE_WEEK_COUNTDOWN:
         case STATE_RACE_WEEK_SCHEDULE:
@@ -67,23 +86,27 @@ void advanceDisplayState(DisplayState phase) {
             currentDisplayState = STATE_IDLE;
             break;
     }
+
+    DBG_INFO("[Display] Screen change: %s → %s", stateName(prev), stateName(currentDisplayState));
     displayNeedsRedraw = true;
 }
 
 // Render the current display state
 void renderCurrentState(RaceData& race) {
     if (!displayNeedsRedraw) return;
+    bool partial = displayPartialUpdate;
     displayNeedsRedraw = false;
+    displayPartialUpdate = false;
 
     switch (currentDisplayState) {
         case STATE_IDLE: {
             Countdown cd = getCountdown(race.firstSessionUtc);
-            drawCountdown(race, cd);
+            drawCountdown(race, cd, partial);
             break;
         }
         case STATE_RACE_WEEK_COUNTDOWN: {
             Countdown cd = getCountdown(race.firstSessionUtc);
-            drawCountdown(race, cd);
+            drawCountdown(race, cd, partial);
             break;
         }
         case STATE_RACE_WEEK_SCHEDULE:
@@ -135,18 +158,22 @@ void updateDisplay(RaceData& race) {
     }
 
     if (phaseChanged) {
+        DBG_INFO("[Display] Phase change: %s → %s", stateName(currentDisplayState), stateName(phase));
         currentDisplayState = phase;
         displayNeedsRedraw = true;
         lastDisplayChange = millis();
     }
 
-    // Countdown state needs frequent updates for the timer
+    // Countdown state: update digits every second without full-screen flicker
     if (currentDisplayState == STATE_IDLE ||
         currentDisplayState == STATE_RACE_WEEK_COUNTDOWN) {
         static unsigned long lastCountdownUpdate = 0;
         if (millis() - lastCountdownUpdate >= COUNTDOWN_UPDATE_MS) {
             lastCountdownUpdate = millis();
-            displayNeedsRedraw = true;
+            if (!displayNeedsRedraw) {          // don't override a pending full redraw
+                displayNeedsRedraw = true;
+                displayPartialUpdate = true;    // digits only — no fillScreen
+            }
         }
     }
 
@@ -163,6 +190,7 @@ void updateDisplay(RaceData& race) {
 // Manual advance (touch input)
 void manualAdvanceDisplay(RaceData& race) {
     DisplayState phase = determinePhase(race);
+    DBG_INFO("[Display] Manual advance from %s", stateName(currentDisplayState));
     advanceDisplayState(phase);
     lastDisplayChange = millis();
 }

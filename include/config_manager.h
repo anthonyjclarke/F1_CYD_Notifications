@@ -4,14 +4,15 @@
 #include <ArduinoJson.h>
 #include "config.h"
 #include "types.h"
+#include "debug.h"
 
 // Initialize LittleFS
 bool initStorage() {
     if (!LittleFS.begin(true)) {
-        Serial.println(F("[Storage] LittleFS mount failed"));
+        DBG_ERROR("[Storage] LittleFS mount failed");
         return false;
     }
-    Serial.println(F("[Storage] LittleFS mounted"));
+    DBG_INFO("[Storage] LittleFS mounted");
     return true;
 }
 
@@ -19,7 +20,7 @@ bool initStorage() {
 bool loadConfig(AppConfig& cfg) {
     File f = LittleFS.open(CONFIG_FILE, "r");
     if (!f) {
-        Serial.println(F("[Config] No config file, using defaults"));
+        DBG_WARN("[Config] No config file found, using defaults");
         setDefaultConfig(cfg);
         return false;
     }
@@ -29,7 +30,7 @@ bool loadConfig(AppConfig& cfg) {
     f.close();
 
     if (err) {
-        Serial.printf("[Config] Parse error: %s\n", err.c_str());
+        DBG_ERROR("[Config] Parse error: %s", err.c_str());
         setDefaultConfig(cfg);
         return false;
     }
@@ -43,8 +44,8 @@ bool loadConfig(AppConfig& cfg) {
     cfg.notificationBits   = doc["notBits"]  | 0;
     cfg.telegramEnabled    = doc["tgOn"]     | false;
 
-    Serial.printf("[Config] Loaded: TZ=%s, Telegram=%s\n",
-                  cfg.timezone, cfg.telegramEnabled ? "on" : "off");
+    DBG_INFO("[Config] Loaded: TZ=%s, Telegram=%s, Brightness=%d",
+             cfg.timezone, cfg.telegramEnabled ? "on" : "off", cfg.brightness);
     return true;
 }
 
@@ -62,12 +63,12 @@ bool saveConfig(const AppConfig& cfg) {
 
     File f = LittleFS.open(CONFIG_FILE, "w");
     if (!f) {
-        Serial.println(F("[Config] Failed to open for write"));
+        DBG_ERROR("[Config] Failed to open %s for write", CONFIG_FILE);
         return false;
     }
     serializeJson(doc, f);
     f.close();
-    Serial.println(F("[Config] Saved"));
+    DBG_VERBOSE("[Config] Saved to %s", CONFIG_FILE);
     return true;
 }
 
@@ -77,6 +78,7 @@ bool cacheSchedule(const String& json) {
     if (!f) return false;
     f.print(json);
     f.close();
+    DBG_VERBOSE("[Config] Schedule cached (%d bytes)", json.length());
     return true;
 }
 
@@ -86,6 +88,7 @@ String loadCachedSchedule() {
     if (!f) return "";
     String json = f.readString();
     f.close();
+    DBG_INFO("[Config] Loaded cached schedule (%d bytes)", json.length());
     return json;
 }
 

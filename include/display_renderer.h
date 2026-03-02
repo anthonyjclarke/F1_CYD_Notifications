@@ -4,6 +4,7 @@
 #include "config.h"
 #include "types.h"
 #include "time_utils.h"
+#include "f1_logo.h"
 
 static TFT_eSPI tft = TFT_eSPI();
 
@@ -38,22 +39,23 @@ void drawCenteredText(const char* text, int y, const GFXfont* font, uint16_t col
 void drawSplashScreen() {
     tft.fillScreen(COLOR_BG);
 
-    // F1 red header bar
-    tft.fillRect(0, 0, SCREEN_WIDTH, 50, COLOR_F1_RED);
-    tft.setTextColor(COLOR_HEADER_TEXT);
-    tft.setTextDatum(MC_DATUM);
-    tft.setFreeFont(&FreeSansBold18pt7b);
-    tft.drawString("F1", SCREEN_WIDTH / 2, 28);
+    // F1 logo on white card - logo is designed for white background
+    constexpr int16_t logoX = (SCREEN_WIDTH - F1_LOGO_WIDTH) / 2;  // 101
+    tft.fillRoundRect(logoX - 5, 5, F1_LOGO_WIDTH + 10, F1_LOGO_HEIGHT + 10, 6, TFT_WHITE);
+    tft.pushImage(logoX, 10, F1_LOGO_WIDTH, F1_LOGO_HEIGHT, f1_logo);
 
+    // Thin red separator below logo card
+    tft.fillRect(0, 83, SCREEN_WIDTH, 3, COLOR_F1_RED);
+
+    tft.setTextDatum(MC_DATUM);
     tft.setTextColor(COLOR_TEXT);
     tft.setFreeFont(&FreeSans12pt7b);
-    tft.setTextDatum(MC_DATUM);
-    tft.drawString("Race Schedule", SCREEN_WIDTH / 2, 90);
+    tft.drawString("Race Schedule", SCREEN_WIDTH / 2, 106);
 
     tft.setFreeFont(&FreeSans9pt7b);
     tft.setTextColor(COLOR_SESSION_TEXT);
-    tft.drawString("Connecting to WiFi...", SCREEN_WIDTH / 2, 140);
-    tft.drawString("v1.0", SCREEN_WIDTH / 2, 220);
+    tft.drawString("Connecting to WiFi...", SCREEN_WIDTH / 2, 148);
+    tft.drawString("v0.2.0", SCREEN_WIDTH / 2, 220);
 }
 
 // --- Schedule Table ---
@@ -66,7 +68,7 @@ void drawScheduleTable(RaceData& race) {
     tft.setTextColor(COLOR_HEADER_TEXT);
     tft.setTextDatum(MC_DATUM);
     tft.setFreeFont(&FreeSansBold9pt7b);
-    tft.drawString("F1 RACE SCHEDULE", SCREEN_WIDTH / 2, 13);
+    tft.drawString("F1 RACE SCHEDULE", SCREEN_WIDTH / 2, 12);
 
     // Race date line
     char dateStr[48];
@@ -145,68 +147,90 @@ void drawScheduleTable(RaceData& race) {
 
 // --- Countdown Display ---
 
-void drawCountdown(RaceData& race, Countdown& cd) {
-    tft.fillScreen(COLOR_BG);
+// Track last-drawn days value to force full redraw on day-boundary transitions
+static int16_t _prevCountdownDays = -1;
 
-    // Header
-    tft.fillRect(0, 0, SCREEN_WIDTH, 24, COLOR_F1_RED);
-    tft.setTextColor(COLOR_HEADER_TEXT);
-    tft.setTextDatum(MC_DATUM);
-    tft.setFreeFont(&FreeSansBold9pt7b);
+void drawCountdown(RaceData& race, Countdown& cd, bool partialUpdate = false) {
+    // Force full redraw when the days value changes (day rolls over, or 1→0 transition)
+    if (cd.days != _prevCountdownDays) {
+        partialUpdate = false;
+    }
+    _prevCountdownDays = cd.days;
 
-    if (cd.days > 0) {
-        tft.drawString("RACE WEEK COUNTDOWN", SCREEN_WIDTH / 2, 13);
-    } else {
-        tft.drawString("SESSION STARTING SOON", SCREEN_WIDTH / 2, 13);
+    char countBuf[16];
+
+    // --- Full redraw: background + all static elements ---
+    if (!partialUpdate) {
+        tft.fillScreen(COLOR_BG);
+
+        tft.fillRect(0, 0, SCREEN_WIDTH, 24, COLOR_F1_RED);
+        tft.setTextColor(COLOR_HEADER_TEXT);
+        tft.setTextDatum(MC_DATUM);
+        tft.setFreeFont(&FreeSansBold9pt7b);
+        tft.drawString(cd.days > 0 ? "RACE WEEK COUNTDOWN" : "SESSION STARTING SOON",
+                       SCREEN_WIDTH / 2, 12);
+
+        if (cd.days > 0) {
+            // Compact name + location above logo
+            tft.setFreeFont(&FreeSans9pt7b);
+            tft.setTextColor(COLOR_TEXT);
+            tft.drawString(race.name, SCREEN_WIDTH / 2, 34);
+            tft.setTextColor(COLOR_SESSION_TEXT);
+            tft.drawString(race.location, SCREEN_WIDTH / 2, 50);
+            // Location center y=50, bottom ~57px
+
+            // F1 logo on white card — pushed down to clear location text
+            // Card: y=66 to y=66+74=140; logo: y=71 to y=131
+            constexpr int16_t logoX = (SCREEN_WIDTH - F1_LOGO_WIDTH) / 2;  // 101
+            tft.fillRoundRect(logoX - 5, 66, F1_LOGO_WIDTH + 10, F1_LOGO_HEIGHT + 10, 6, TFT_WHITE);
+            tft.pushImage(logoX, 71, F1_LOGO_WIDTH, F1_LOGO_HEIGHT, f1_logo);
+        } else {
+            // No logo — compact HH:MM:SS layout with next session info
+            tft.setFreeFont(&FreeSans12pt7b);
+            tft.setTextColor(COLOR_TEXT);
+            tft.drawString(race.name, SCREEN_WIDTH / 2, 50);
+            tft.setFreeFont(&FreeSans9pt7b);
+            tft.setTextColor(COLOR_SESSION_TEXT);
+            tft.drawString(race.location, SCREEN_WIDTH / 2, 72);
+
+            // Next session label (static until session boundary)
+            time_t now = nowUTC();
+            for (uint8_t i = 0; i < race.sessionCount; i++) {
+                if (race.sessions[i].utcTime > now) {
+                    char sessionBuf[48];
+                    snprintf(sessionBuf, sizeof(sessionBuf), "%s - %s %s",
+                             race.sessions[i].label, race.sessions[i].dayAbbrev,
+                             race.sessions[i].localTime);
+                    tft.drawString(sessionBuf, SCREEN_WIDTH / 2, 218);
+                    break;
+                }
+            }
+        }
     }
 
-    // Race name
-    tft.setFreeFont(&FreeSans12pt7b);
-    tft.setTextColor(COLOR_TEXT);
-    tft.drawString(race.name, SCREEN_WIDTH / 2, 50);
-    tft.setFreeFont(&FreeSans9pt7b);
-    tft.setTextColor(COLOR_SESSION_TEXT);
-    tft.drawString(race.location, SCREEN_WIDTH / 2, 72);
-
-    // Large countdown digits
-    char countBuf[16];
+    // --- Partial-update: erase then redraw only the changing number region ---
     if (cd.days > 0) {
-        // Show days prominently
+        // Keep clear of logo card (y=66..140) so rounded bottom corners remain visible
+        tft.fillRect(0, 142, SCREEN_WIDTH, 76, COLOR_BG);  // y=142 to y=218
+
         snprintf(countBuf, sizeof(countBuf), "%d", cd.days);
         tft.setFreeFont(&FreeMonoBold24pt7b);
         tft.setTextColor(COLOR_COUNTDOWN);
         tft.setTextDatum(MC_DATUM);
-        tft.drawString(countBuf, SCREEN_WIDTH / 2, 130);
+        tft.drawString(countBuf, SCREEN_WIDTH / 2, 172);  // center ~y=143-201
 
-        tft.setFreeFont(&FreeSans12pt7b);
+        tft.setFreeFont(&FreeSans9pt7b);
         tft.setTextColor(COLOR_SESSION_TEXT);
-        tft.drawString(cd.days == 1 ? "DAY" : "DAYS", SCREEN_WIDTH / 2, 168);
+        tft.drawString(cd.days == 1 ? "DAY" : "DAYS", SCREEN_WIDTH / 2, 210);
     } else {
-        // Show hours:minutes:seconds
+        // Erase region covers HH:MM:SS (FreeMonoBold24pt7b centered at y=138, ~±30px)
+        tft.fillRect(0, 107, SCREEN_WIDTH, 63, COLOR_BG);  // y=107 to y=170
+
         snprintf(countBuf, sizeof(countBuf), "%02d:%02d:%02d", cd.hours, cd.minutes, cd.seconds);
         tft.setFreeFont(&FreeMonoBold24pt7b);
         tft.setTextColor(COLOR_COUNTDOWN);
         tft.setTextDatum(MC_DATUM);
         tft.drawString(countBuf, SCREEN_WIDTH / 2, 138);
-    }
-
-    // Next session info at bottom
-    if (race.sessionCount > 0) {
-        // Find next upcoming session
-        time_t now = nowUTC();
-        for (uint8_t i = 0; i < race.sessionCount; i++) {
-            if (race.sessions[i].utcTime > now) {
-                char sessionBuf[48];
-                snprintf(sessionBuf, sizeof(sessionBuf), "%s - %s %s",
-                         race.sessions[i].label, race.sessions[i].dayAbbrev,
-                         race.sessions[i].localTime);
-                tft.setFreeFont(&FreeSans9pt7b);
-                tft.setTextColor(COLOR_SESSION_TEXT);
-                tft.setTextDatum(MC_DATUM);
-                tft.drawString(sessionBuf, SCREEN_WIDTH / 2, 210);
-                break;
-            }
-        }
     }
 }
 
@@ -220,7 +244,7 @@ void drawTrackLayout(const uint8_t* xbmData, uint16_t w, uint16_t h, RaceData& r
     tft.setTextColor(COLOR_HEADER_TEXT);
     tft.setTextDatum(MC_DATUM);
     tft.setFreeFont(&FreeSansBold9pt7b);
-    tft.drawString("CIRCUIT LAYOUT", SCREEN_WIDTH / 2, 13);
+    tft.drawString("CIRCUIT LAYOUT", SCREEN_WIDTH / 2, 12);
 
     // Race name
     tft.setFreeFont(&FreeSans9pt7b);
@@ -251,7 +275,7 @@ void drawRaceWinner(RaceData& race) {
     tft.setTextColor(COLOR_HEADER_TEXT);
     tft.setTextDatum(MC_DATUM);
     tft.setFreeFont(&FreeSansBold9pt7b);
-    tft.drawString("RACE RESULT", SCREEN_WIDTH / 2, 13);
+    tft.drawString("RACE RESULT", SCREEN_WIDTH / 2, 14);
 
     // Race name
     tft.setFreeFont(&FreeSans9pt7b);
@@ -298,7 +322,7 @@ void drawDriverStandings() {
     tft.setTextColor(COLOR_HEADER_TEXT);
     tft.setTextDatum(MC_DATUM);
     tft.setFreeFont(&FreeSansBold9pt7b);
-    tft.drawString("DRIVER STANDINGS", SCREEN_WIDTH / 2, 13);
+    tft.drawString("DRIVER STANDINGS", SCREEN_WIDTH / 2, 12);
 
     if (driverStandingsCount == 0) {
         tft.setTextColor(COLOR_GRID);
@@ -357,7 +381,7 @@ void drawConstructorStandings() {
     tft.setTextColor(COLOR_HEADER_TEXT);
     tft.setTextDatum(MC_DATUM);
     tft.setFreeFont(&FreeSansBold9pt7b);
-    tft.drawString("CONSTRUCTOR STANDINGS", SCREEN_WIDTH / 2, 13);
+    tft.drawString("CONSTRUCTOR STANDINGS", SCREEN_WIDTH / 2, 12);
 
     if (constructorStandingsCount == 0) {
         tft.setTextColor(COLOR_GRID);
@@ -407,11 +431,11 @@ void drawConstructorStandings() {
 
 // --- Status message overlay ---
 
-void drawStatusMessage(const char* msg) {
+void drawStatusMessage(const char* msg, int yOffset = 0) {
     tft.setFreeFont(&FreeSans9pt7b);
     tft.setTextColor(COLOR_SESSION_TEXT, COLOR_BG);
     tft.setTextDatum(MC_DATUM);
-    tft.drawString(msg, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
+    tft.drawString(msg, SCREEN_WIDTH / 2, (SCREEN_HEIGHT / 2) + yOffset);
 }
 
 // --- Update brightness from config or LDR ---

@@ -1,0 +1,106 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Version scheme: `MAJOR.MINOR.PATCH`
+- MAJOR: breaking hardware/config change
+- MINOR: new feature or significant addition
+- PATCH: bug fix or small tweak
+
+---
+
+## [Unreleased]
+
+### Planned
+- Track circuit XBM images for all 24 2026 rounds
+- Touch calibration tuning on hardware
+- `initTelegram()` call in web config POST when bot token changes
+- `cacheResults()` wired into `fetchPostRaceData()` for reboot persistence
+- WiFi reconnection logic in main loop
+- NTP server field in WiFiManager captive portal
+- Double-reset detection to clear WiFi credentials (e.g. ESP_DoubleResetDetector)
+- Season rollover: update `SCHEDULE_URL` and `JOLPICA_BASE_URL` year
+- End-to-end hardware test and display calibration
+
+---
+
+## [0.3.0] - 2026-03-02
+
+### Added
+- **F1 logo on TFT splash screen** — `pushImage()` with `TFT_WHITE` transparency renders logo on dark background; replaces previous "F1" text header with branded image; thin red separator divides logo from subtitle text
+- **F1 logo on TFT countdown screen** — logo displayed between location text and day-count when `cd.days > 0`; compact 9pt race name/location to accommodate logo; HH:MM:SS urgent mode (days == 0) unchanged
+- **`/logo.raw` web endpoint** — serves raw RGB565 PROGMEM bytes with 24 h browser cache header; no RAM copy needed (`beginResponse_P`)
+- **`/api/schedule` web endpoint** — returns current race as JSON: `name`, `location`, `round`, `isSprint`, and `sessions[]` array with `label`, `day`, `time`, `type` (enum int), `utc` (epoch)
+- **Schedule tab in web UI** — two-tab layout (⚙ Config / 📅 Schedule); Schedule tab shows race header with sprint badge, session table with SESSION / DAY / TIME / IN columns
+- **Live countdown column** — "In" cells update every second via `setInterval`; format: `Xd Yh` (days), `Xh Ym` (hours), `Xm YYs` (< 1 hour); past sessions show em-dash
+- **Session row colour coding** — next upcoming session highlighted green; GP row label red; Sprint label yellow; past sessions dimmed; all via CSS classes applied at render time
+- **Canvas logo in web UI** — `<canvas>` element renders RGB565 data from `/logo.raw` via `Uint16Array`; white pixels made transparent (alpha=0) for seamless dark-theme display; scaled 2× via CSS `image-rendering: pixelated`
+
+### Changed
+- `drawSplashScreen()` — logo replaces "F1" text in large red bar; layout now: logo (y=10–74) → red line (y=82) → "Race Schedule" subtitle → status text
+- `drawCountdown()` — days > 0 branch: race name shrunk to FreeSans9pt7b to recover vertical space; logo inserted at y=66; day count repositioned to y=163 (clear of logo); DAYS label at y=200; session info at y=222
+- `include/display_renderer.h` — added `#include "f1_logo.h"`
+- `include/web_server.h` — added `#include "f1_logo.h"`; removed `nextRace` field from `/api/status` (now served by `/api/schedule`); HTML rewritten with tab structure and schedule table
+
+---
+
+## [0.2.0] - 2026-03-02
+
+### Added
+- `include/debug.h` — leveled serial logging system with runtime control
+  - Four macros: `DBG_ERROR`, `DBG_WARN`, `DBG_INFO`, `DBG_VERBOSE`
+  - Levels: 0=Off, 1=Error, 2=Warn, 3=Info (default), 4=Verbose
+  - `debugLevel` variable adjustable at runtime without recompile
+- Web API endpoints for debug level control
+  - `GET /api/debug` → `{"level": N}`
+  - `POST /api/debug` body `level=N` → updates `debugLevel` and returns new value
+- Debug level selector (0–4 dropdown + Apply button) added to web config UI
+- Numbered setup step banners in `setup()` — `[Main] 1/11 ... 11/11` — for clear boot sequence tracing on serial monitor
+- `stateName()` helper in `display_states.h` for human-readable state names in logs
+- Display phase transition and screen rotation logging (`[Display] Phase change →`, `Screen rotate: A → B`)
+- Touch coordinate logging at VERBOSE level
+- Results polling activation log with elapsed hours since GP
+- WiFi RSSI logged alongside IP on successful connection
+
+### Changed
+- All `Serial.println(F(...))` and `Serial.printf(...)` calls replaced with `DBG_*` macros across all modules:
+  - `src/main.cpp`
+  - `include/config_manager.h`
+  - `include/wifi_setup.h`
+  - `include/time_utils.h`
+  - `include/f1_data.h`
+  - `include/telegram_handler.h`
+  - `include/display_states.h`
+  - `include/web_server.h`
+- Previously silent HTTP failure paths in `fetchDriverStandings()` and `fetchConstructorStandings()` now emit `DBG_WARN`
+- `saveConfig()` demoted from `DBG_INFO` to `DBG_VERBOSE` (called every minute in loop)
+- Telegram send path: per-send detail at VERBOSE, result (OK/fail) at INFO/WARN
+- Config load summary extended to include brightness value
+- F1 schedule parse now logs JSON payload size and whether weekend is sprint or standard
+
+---
+
+## [0.1.0] - 2026-03-02
+
+### Added
+- `platformio.ini` — ESP32-2432S028R (2.8" CYD) target
+  - `espressif32@6.9.0`, `esp32dev` board, Arduino framework
+  - TFT_eSPI configured entirely via `build_flags` (no `User_Setup.h`)
+  - ILI9341 240×320 @ 55 MHz SPI, XPT2046 touch @ 2.5 MHz
+  - LittleFS filesystem (min_spiffs partition)
+  - Libraries: TFT_eSPI 2.5.43, ArduinoJson 7.4.0, WiFiManager, Universal-Arduino-Telegram-Bot, ESPAsyncWebServer 3.6.2, AsyncTCP 3.3.3, ElegantOTA 3.1.6, ezTime 0.8.3
+- `include/config.h` — all pin definitions, display constants, timing intervals, colour palette (RGB565), file paths, API URLs
+- `include/types.h` — core data structures: `RaceData`, `SessionInfo`, `RaceResult`, `StandingEntry`, `AppConfig`; `DisplayState` and `SessionType` enums; notification bitmask defines
+- `include/config_manager.h` — LittleFS init, `loadConfig`/`saveConfig` (JSON), schedule and results cache read/write
+- `include/wifi_setup.h` — WiFiManager captive portal with custom parameters for timezone, Telegram bot token and chat ID
+- `include/time_utils.h` — NTP initialisation via ezTime, IANA timezone, `formatLocalDay/Time/FullDate`, `getCountdown`, `isWithinHours`, `isMonday`, `daysSince`
+- `include/f1_data.h` — F1 schedule fetch from sportstimes GitHub JSON; post-race results, driver standings, constructor standings from Jolpica (Ergast-compatible) API; `parseSchedule` loads prev/current/next race into fixed array
+- `include/display_renderer.h` — all TFT_eSPI drawing functions: splash screen, schedule table, countdown (day/HH:MM:SS), track layout (XBM), race winner/podium, driver standings, constructor standings, status overlay, LDR auto-brightness
+- `include/display_states.h` — 7-state display state machine: `IDLE`, `RACE_WEEK_COUNTDOWN`, `RACE_WEEK_SCHEDULE`, `RACE_WEEK_TRACK`, `POST_RACE_WINNER`, `POST_RACE_DRIVERS`, `POST_RACE_CONSTRUCTORS`; auto-rotation via `millis()` timer; touch-driven manual advance
+- `include/telegram_handler.h` — bot init, message formatting for race week / pre-session / results; `checkNotifications()` with per-round bitmask deduplication persisted to LittleFS
+- `include/web_server.h` — ESPAsyncWebServer config UI (PROGMEM HTML, dark F1-themed), `GET/POST /api/config`, `GET /api/status`; ElegantOTA at `/update`
+- `include/track_images.h` — XBM track image lookup scaffold; placeholder data; all 24 2026 circuit slugs listed; slot stubs ready for images
+- `src/main.cpp` — `setup()` / `loop()`; RGB LED boot status (blue=connecting, green=connected); resistive touch input; non-blocking `millis()` scheduling for: display updates (1 s countdown tick, 8/10 s screen rotation), notification checks (1 min), post-race results polling (30 min retry, 3–24 h window), schedule refresh (24 h), brightness update (10 s)
+- `CLAUDE.md` — project documentation for Claude Code: hardware, pin map, architecture, known issues, TODO list
+- `F1 Notification CYD Project_Brief.txt` — original project specification and feature requirements

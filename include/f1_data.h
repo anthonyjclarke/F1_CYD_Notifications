@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include "config.h"
 #include "types.h"
+#include "debug.h"
 #include "time_utils.h"
 #include "config_manager.h"
 
@@ -12,6 +13,17 @@
 static RaceData races[MAX_RACES];       // prev, current, next
 static uint8_t currentRaceIdx = 1;      // Index into races[] for current/next race
 static uint8_t totalRacesLoaded = 0;
+
+// --- Compact upcoming race list (all future rounds, populated by parseSchedule) ---
+struct UpcomingRace {
+    uint8_t  round;
+    bool     isSprint;
+    char     name[24];
+    char     location[16];
+    time_t   gpTimeUtc;
+};
+static UpcomingRace upcomingRaces[25];
+static uint8_t upcomingCount = 0;
 
 // --- Post-race data ---
 static RaceResult podium[MAX_PODIUM];
@@ -59,11 +71,14 @@ static void addSession(RaceData& race, SessionType type, const char* isoTime) {
     strlcpy(s.label, sessionLabel(type), sizeof(s.label));
     formatLocalDay(s.utcTime, s.dayAbbrev, sizeof(s.dayAbbrev));
     formatLocalTime(s.utcTime, s.localTime, sizeof(s.localTime));
+    DBG_VERBOSE("[F1]   + %s  %s %s", s.label, s.dayAbbrev, s.localTime);
     race.sessionCount++;
 }
 
 // Parse the sportstimes JSON and find relevant races
 bool parseSchedule(const String& json) {
+    DBG_INFO("[F1] Parsing schedule JSON (%d bytes)", json.length());
+
     JsonDocument filter;
     JsonObject rf = filter["races"][0].to<JsonObject>();
     rf["name"]     = true;
@@ -75,15 +90,17 @@ bool parseSchedule(const String& json) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json, DeserializationOption::Filter(filter));
     if (err) {
-        Serial.printf("[F1] JSON parse error: %s\n", err.c_str());
+        DBG_ERROR("[F1] JSON parse error: %s", err.c_str());
         return false;
     }
 
     JsonArray racesArr = doc["races"].as<JsonArray>();
     if (racesArr.isNull() || racesArr.size() == 0) {
-        Serial.println(F("[F1] No races in JSON"));
+        DBG_ERROR("[F1] No races found in JSON");
         return false;
     }
+
+    DBG_VERBOSE("[F1] Total races in feed: %d", racesArr.size());
 
     // Find the current/next race based on GP time
     time_t now = nowUTC();
@@ -102,6 +119,7 @@ bool parseSchedule(const String& json) {
     if (nextIdx < 0) {
         // Season is over, use last race
         nextIdx = racesArr.size() - 1;
+        DBG_WARN("[F1] Season appears over, defaulting to last race");
     }
 
     // Load prev, current, next
@@ -123,6 +141,9 @@ bool parseSchedule(const String& json) {
 
         JsonObject sessions = race["sessions"];
         rd.isSprint = sessions.containsKey("sprint");
+
+        DBG_VERBOSE("[F1] R%d %s (%s%s)", rd.round, rd.name, rd.location,
+                    rd.isSprint ? " - Sprint" : "");
 
         if (rd.isSprint) {
             addSession(rd, SESSION_FP1,               sessions["fp1"]);
@@ -146,14 +167,30 @@ bool parseSchedule(const String& json) {
         totalRacesLoaded++;
     }
 
-    Serial.printf("[F1] Loaded %d races. Current: R%d %s\n",
-                  totalRacesLoaded, races[1].round, races[1].name);
+    DBG_INFO("[F1] Loaded %d races. Current: R%d %s (%s)",
+             totalRacesLoaded, races[1].round, races[1].name,
+             races[1].isSprint ? "Sprint weekend" : "Standard weekend");
+
+    // Populate compact upcoming-races list (all rounds from current onward)
+    upcomingCount = 0;
+    for (int i = nextIdx; i < (int)racesArr.size() && upcomingCount < 25; i++) {
+        JsonObject r = racesArr[i];
+        UpcomingRace& ur = upcomingRaces[upcomingCount];
+        ur.round    = r["round"] | 0;
+        ur.isSprint = r["sessions"].containsKey("sprint");
+        strlcpy(ur.name,     r["name"]     | "Unknown", sizeof(ur.name));
+        strlcpy(ur.location, r["location"] | "",        sizeof(ur.location));
+        ur.gpTimeUtc = parseISO8601(r["sessions"]["gp"]);
+        upcomingCount++;
+    }
+    DBG_INFO("[F1] Upcoming races: %d (from R%d to end of season)", upcomingCount,
+             upcomingCount > 0 ? upcomingRaces[0].round : 0);
     return true;
 }
 
 // Fetch schedule from GitHub
 bool fetchSchedule() {
-    Serial.println(F("[F1] Fetching schedule..."));
+    DBG_INFO("[F1] Fetching schedule from GitHub...");
     WiFiClientSecure client;
     client.setInsecure();  // Skip cert verification for GitHub raw
 
@@ -163,13 +200,14 @@ bool fetchSchedule() {
     int code = http.GET();
 
     if (code != 200) {
-        Serial.printf("[F1] HTTP %d\n", code);
+        DBG_WARN("[F1] Schedule fetch HTTP %d", code);
         http.end();
         return false;
     }
 
     String json = http.getString();
     http.end();
+    DBG_INFO("[F1] Schedule received (%d bytes)", json.length());
 
     // Cache and parse
     cacheSchedule(json);
@@ -178,15 +216,18 @@ bool fetchSchedule() {
 
 // Load schedule from cache
 bool loadScheduleFromCache() {
+    DBG_INFO("[F1] Loading schedule from cache");
     String json = loadCachedSchedule();
-    if (json.isEmpty()) return false;
-    Serial.println(F("[F1] Loading from cache"));
+    if (json.isEmpty()) {
+        DBG_WARN("[F1] No cached schedule available");
+        return false;
+    }
     return parseSchedule(json);
 }
 
 // Fetch race results from Jolpica API
 bool fetchRaceResults(uint8_t round) {
-    Serial.printf("[F1] Fetching results for R%d...\n", round);
+    DBG_INFO("[F1] Fetching results for R%d", round);
     HTTPClient http;
     char url[128];
     snprintf(url, sizeof(url), "%s/%d/results.json?limit=3", JOLPICA_BASE_URL, round);
@@ -195,7 +236,7 @@ bool fetchRaceResults(uint8_t round) {
     int code = http.GET();
 
     if (code != 200) {
-        Serial.printf("[F1] Results HTTP %d\n", code);
+        DBG_WARN("[F1] Race results HTTP %d", code);
         http.end();
         return false;
     }
@@ -205,10 +246,16 @@ bool fetchRaceResults(uint8_t round) {
 
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
-    if (err) return false;
+    if (err) {
+        DBG_ERROR("[F1] Results parse error: %s", err.c_str());
+        return false;
+    }
 
     JsonArray results = doc["MRData"]["RaceTable"]["Races"][0]["Results"];
-    if (results.isNull() || results.size() == 0) return false;
+    if (results.isNull() || results.size() == 0) {
+        DBG_WARN("[F1] No results data in response (race may still be running)");
+        return false;
+    }
 
     podiumCount = 0;
     for (JsonObject r : results) {
@@ -223,14 +270,16 @@ bool fetchRaceResults(uint8_t round) {
         podiumCount++;
     }
 
-    Serial.printf("[F1] Results: P1=%s, P2=%s, P3=%s\n",
-                  podium[0].driverCode, podium[1].driverCode, podium[2].driverCode);
+    DBG_INFO("[F1] Podium: P1=%s  P2=%s  P3=%s",
+             podium[0].driverCode,
+             podiumCount > 1 ? podium[1].driverCode : "-",
+             podiumCount > 2 ? podium[2].driverCode : "-");
     return podiumCount > 0;
 }
 
 // Fetch driver standings from Jolpica API
 bool fetchDriverStandings() {
-    Serial.println(F("[F1] Fetching driver standings..."));
+    DBG_INFO("[F1] Fetching driver standings");
     HTTPClient http;
     char url[128];
     snprintf(url, sizeof(url), "%s/driverstandings.json?limit=10", JOLPICA_BASE_URL);
@@ -238,16 +287,26 @@ bool fetchDriverStandings() {
     http.setTimeout(10000);
     int code = http.GET();
 
-    if (code != 200) { http.end(); return false; }
+    if (code != 200) {
+        DBG_WARN("[F1] Driver standings HTTP %d", code);
+        http.end();
+        return false;
+    }
 
     String json = http.getString();
     http.end();
 
     JsonDocument doc;
-    if (deserializeJson(doc, json)) return false;
+    if (deserializeJson(doc, json)) {
+        DBG_ERROR("[F1] Driver standings parse error");
+        return false;
+    }
 
     JsonArray standings = doc["MRData"]["StandingsTable"]["StandingsLists"][0]["DriverStandings"];
-    if (standings.isNull()) return false;
+    if (standings.isNull()) {
+        DBG_WARN("[F1] No driver standings in response");
+        return false;
+    }
 
     driverStandingsCount = 0;
     for (JsonObject s : standings) {
@@ -262,12 +321,17 @@ bool fetchDriverStandings() {
                  s["Driver"]["familyName"] | "");
         driverStandingsCount++;
     }
+
+    DBG_INFO("[F1] Driver standings: %d entries. P1: %s (%d pts)",
+             driverStandingsCount,
+             driverStandingsCount > 0 ? driverStandings[0].code : "?",
+             driverStandingsCount > 0 ? driverStandings[0].points : 0);
     return driverStandingsCount > 0;
 }
 
 // Fetch constructor standings from Jolpica API
 bool fetchConstructorStandings() {
-    Serial.println(F("[F1] Fetching constructor standings..."));
+    DBG_INFO("[F1] Fetching constructor standings");
     HTTPClient http;
     char url[128];
     snprintf(url, sizeof(url), "%s/constructorstandings.json?limit=10", JOLPICA_BASE_URL);
@@ -275,16 +339,26 @@ bool fetchConstructorStandings() {
     http.setTimeout(10000);
     int code = http.GET();
 
-    if (code != 200) { http.end(); return false; }
+    if (code != 200) {
+        DBG_WARN("[F1] Constructor standings HTTP %d", code);
+        http.end();
+        return false;
+    }
 
     String json = http.getString();
     http.end();
 
     JsonDocument doc;
-    if (deserializeJson(doc, json)) return false;
+    if (deserializeJson(doc, json)) {
+        DBG_ERROR("[F1] Constructor standings parse error");
+        return false;
+    }
 
     JsonArray standings = doc["MRData"]["StandingsTable"]["StandingsLists"][0]["ConstructorStandings"];
-    if (standings.isNull()) return false;
+    if (standings.isNull()) {
+        DBG_WARN("[F1] No constructor standings in response");
+        return false;
+    }
 
     constructorStandingsCount = 0;
     for (JsonObject s : standings) {
@@ -297,15 +371,22 @@ bool fetchConstructorStandings() {
         strlcpy(e.code, "", sizeof(e.code));  // No code for constructors
         constructorStandingsCount++;
     }
+
+    DBG_INFO("[F1] Constructor standings: %d entries. P1: %s (%d pts)",
+             constructorStandingsCount,
+             constructorStandingsCount > 0 ? constructorStandings[0].name : "?",
+             constructorStandingsCount > 0 ? constructorStandings[0].points : 0);
     return constructorStandingsCount > 0;
 }
 
 // Fetch all post-race data
 bool fetchPostRaceData(uint8_t round) {
+    DBG_INFO("[F1] Fetching all post-race data for R%d", round);
     bool ok = fetchRaceResults(round);
     ok = fetchDriverStandings() && ok;
     ok = fetchConstructorStandings() && ok;
     resultsAvailable = ok;
+    DBG_INFO("[F1] Post-race data fetch: %s", ok ? "complete" : "FAILED (will retry)");
     return ok;
 }
 

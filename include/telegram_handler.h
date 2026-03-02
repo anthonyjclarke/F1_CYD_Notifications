@@ -4,6 +4,7 @@
 #include <UniversalTelegramBot.h>
 #include "config.h"
 #include "types.h"
+#include "debug.h"
 #include "time_utils.h"
 
 static WiFiClientSecure telegramClient;
@@ -13,24 +14,28 @@ static bool telegramReady = false;
 // Initialize Telegram bot
 void initTelegram(const char* token) {
     if (strlen(token) == 0) {
+        DBG_WARN("[Telegram] No bot token configured");
         telegramReady = false;
         return;
     }
     telegramClient.setInsecure();  // Skip cert verification
     bot = new UniversalTelegramBot(token, telegramClient);
     telegramReady = true;
-    Serial.println(F("[Telegram] Bot initialized"));
+    DBG_INFO("[Telegram] Bot initialized");
 }
 
 // Send a message via Telegram
 bool sendTelegramMessage(const char* chatId, const String& message) {
-    if (!telegramReady || !bot || strlen(chatId) == 0) return false;
-    Serial.printf("[Telegram] Sending to %s...\n", chatId);
+    if (!telegramReady || !bot || strlen(chatId) == 0) {
+        DBG_WARN("[Telegram] Cannot send: not ready or no chat ID");
+        return false;
+    }
+    DBG_VERBOSE("[Telegram] Sending to chat %s (%d chars)", chatId, message.length());
     bool ok = bot->sendMessage(chatId, message, "");
     if (ok) {
-        Serial.println(F("[Telegram] Sent OK"));
+        DBG_INFO("[Telegram] Message sent OK");
     } else {
-        Serial.println(F("[Telegram] Send failed"));
+        DBG_WARN("[Telegram] Send failed");
     }
     return ok;
 }
@@ -99,6 +104,8 @@ void checkNotifications(RaceData& race, AppConfig& cfg) {
 
     // Reset notification bits when we move to a new round
     if (cfg.lastNotifiedRound != race.round) {
+        DBG_INFO("[Telegram] New round (%d→%d), resetting notification bits",
+                 cfg.lastNotifiedRound, race.round);
         cfg.lastNotifiedRound = race.round;
         cfg.notificationBits = 0;
     }
@@ -108,6 +115,7 @@ void checkNotifications(RaceData& race, AppConfig& cfg) {
     if (daysToFirst >= 0 && daysToFirst <= COUNTDOWN_WEEK_DAYS &&
         isMonday() &&
         !(cfg.notificationBits & NOTIFY_RACE_WEEK)) {
+        DBG_INFO("[Telegram] Sending race week notification: %s", race.name);
         String msg = formatRaceWeekMessage(race);
         if (sendTelegramMessage(cfg.chatId, msg)) {
             cfg.notificationBits |= NOTIFY_RACE_WEEK;
@@ -129,6 +137,7 @@ void checkNotifications(RaceData& race, AppConfig& cfg) {
         }
 
         if (!(cfg.notificationBits & notifyBit)) {
+            DBG_INFO("[Telegram] Sending pre-session notification: %s", s.label);
             String msg = formatPreSessionMessage(s.label, race);
             if (sendTelegramMessage(cfg.chatId, msg)) {
                 cfg.notificationBits |= notifyBit;
@@ -139,6 +148,7 @@ void checkNotifications(RaceData& race, AppConfig& cfg) {
     // Results notification - after GP
     if (resultsAvailable && podiumCount > 0 &&
         !(cfg.notificationBits & NOTIFY_RESULT)) {
+        DBG_INFO("[Telegram] Sending race results notification");
         String msg = formatResultsMessage(race, podium, podiumCount);
         if (sendTelegramMessage(cfg.chatId, msg)) {
             cfg.notificationBits |= NOTIFY_RESULT;

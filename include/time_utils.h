@@ -2,6 +2,7 @@
 
 #include <ezTime.h>
 #include "config.h"
+#include "debug.h"
 
 static Timezone myTZ;
 
@@ -10,19 +11,19 @@ bool initTime(const char* tzString, const char* ntpServer) {
     setServer(ntpServer);
     setInterval(3600);  // Re-sync every hour
 
-    Serial.printf("[Time] Syncing NTP via %s...\n", ntpServer);
+    DBG_INFO("[Time] Syncing NTP via %s", ntpServer);
     if (!waitForSync(15)) {
-        Serial.println(F("[Time] NTP sync failed"));
+        DBG_WARN("[Time] NTP sync timed out");
         return false;
     }
-    Serial.println(F("[Time] NTP synced"));
+    DBG_INFO("[Time] NTP synced");
 
     if (!myTZ.setLocation(tzString)) {
-        Serial.printf("[Time] Invalid timezone: %s, falling back to UTC\n", tzString);
+        DBG_WARN("[Time] Invalid timezone '%s', falling back to UTC", tzString);
         myTZ.setLocation("UTC");
         return false;
     }
-    Serial.printf("[Time] Timezone set: %s\n", tzString);
+    DBG_INFO("[Time] Timezone set: %s", tzString);
     return true;
 }
 

@@ -10,6 +10,7 @@
 #include <WiFi.h>
 
 #include "config.h"
+#include "debug.h"
 #include "types.h"
 #include "config_manager.h"
 #include "wifi_setup.h"
@@ -19,6 +20,7 @@
 #include "display_states.h"
 #include "telegram_handler.h"
 #include "web_server.h"
+#include "f1_logo.h"
 
 // --- Global State ---
 AppConfig appConfig;
@@ -39,12 +41,14 @@ void initTouch() {
     uint16_t calData[5] = {300, 3600, 300, 3600, 7};  // Approximate, tune later
     tft.setTouch(calData);
     touchEnabled = true;
+    DBG_INFO("[Main] Touch initialized");
 }
 
 void checkTouch() {
     if (!touchEnabled) return;
     uint16_t x, y;
     if (tft.getTouch(&x, &y)) {
+        DBG_VERBOSE("[Main] Touch at (%d, %d)", x, y);
         manualAdvanceDisplay(getCurrentRace());
     }
 }
@@ -76,6 +80,9 @@ void checkResultsPolling() {
     if (secsAfterGP >= RESULTS_POLL_AFTER_SEC &&
         secsAfterGP < RESULTS_GIVE_UP_SEC &&
         !resultsAvailable) {
+        if (!resultsPollActive) {
+            DBG_INFO("[Main] Results polling activated (%.1fh after GP)", secsAfterGP / 3600.0f);
+        }
         resultsPollActive = true;
     } else {
         resultsPollActive = false;
@@ -84,6 +91,7 @@ void checkResultsPolling() {
     if (resultsPollActive &&
         millis() - lastResultsPoll >= RESULTS_RETRY_MS) {
         lastResultsPoll = millis();
+        DBG_INFO("[Main] Polling for race results (R%d)...", race.round);
         if (fetchPostRaceData(race.round)) {
             resultsPollActive = false;
             requestRedraw();
@@ -97,7 +105,7 @@ void checkResultsPolling() {
 void checkScheduleRefresh() {
     if (millis() - lastScheduleFetch >= SCHEDULE_REFRESH_MS) {
         lastScheduleFetch = millis();
-        Serial.println(F("[Main] Refreshing schedule..."));
+        DBG_INFO("[Main] 24h schedule refresh triggered");
         if (fetchSchedule()) {
             requestRedraw();
         }
@@ -110,61 +118,74 @@ void checkScheduleRefresh() {
 void setup() {
     Serial.begin(115200);
     delay(500);
-    Serial.println(F("\n=== F1 CYD Notifications ==="));
+    DBG_INFO("=== F1 CYD Notifications ===");
+    DBG_INFO("[Main] Debug level: %d", debugLevel);
 
     // 1. Init display and show splash
+    DBG_INFO("[Main] 1/11 Initializing display");
     initDisplay();
     drawSplashScreen();
 
     // 2. Init LED
+    DBG_INFO("[Main] 2/11 Initializing LED");
     initLED();
     setLED(false, false, true);  // Blue = connecting
 
     // 3. Init LittleFS and load config
+    DBG_INFO("[Main] 3/11 Mounting filesystem and loading config");
     initStorage();
     loadConfig(appConfig);
 
     // 4. Apply brightness
+    DBG_INFO("[Main] 4/11 Applying brightness: %d", appConfig.brightness);
     updateBrightness(appConfig.brightness);
 
     // 5. Connect WiFi (blocks until connected or restarts)
+    DBG_INFO("[Main] 5/11 Starting WiFi");
     setupWiFi(appConfig);
     setLED(false, true, false);  // Green = connected
 
     // 6. Sync NTP time
-    drawStatusMessage("Syncing time...");
+    DBG_INFO("[Main] 6/11 Syncing NTP time (TZ: %s)", appConfig.timezone);
+    drawStatusMessage("Syncing time...", 6);
     if (!initTime(appConfig.timezone, appConfig.ntpServer)) {
-        Serial.println(F("[Main] Time sync warning - continuing"));
+        DBG_WARN("[Main] Time sync failed - continuing without NTP");
     }
 
     // 7. Fetch F1 schedule
-    drawStatusMessage("Loading F1 schedule...");
+    DBG_INFO("[Main] 7/11 Fetching F1 schedule");
+    drawStatusMessage("Loading F1 schedule...", 6);
     if (!fetchSchedule()) {
-        Serial.println(F("[Main] Fetch failed, trying cache"));
+        DBG_WARN("[Main] Schedule fetch failed, trying cache");
         if (!loadScheduleFromCache()) {
-            drawStatusMessage("No schedule data available");
+            DBG_ERROR("[Main] No schedule data available");
+            drawStatusMessage("No schedule data available", 6);
             delay(2000);
         }
     }
     lastScheduleFetch = millis();
 
     // 8. Init Telegram
+    DBG_INFO("[Main] 8/11 Telegram: %s", appConfig.telegramEnabled ? "enabled" : "disabled");
     if (appConfig.telegramEnabled) {
         initTelegram(appConfig.botToken);
     }
 
     // 9. Start web server + OTA
+    DBG_INFO("[Main] 9/11 Starting web server");
     setupWebServer(appConfig);
 
     // 10. Init touch
+    DBG_INFO("[Main] 10/11 Initializing touch");
     initTouch();
 
     // 11. Ready
     setLED(false, false, false);  // LED off
     requestRedraw();
 
-    Serial.printf("[Main] Setup complete. Free heap: %d bytes\n", ESP.getFreeHeap());
-    Serial.printf("[Main] IP: %s\n", WiFi.localIP().toString().c_str());
+    DBG_INFO("[Main] 11/11 Setup complete");
+    DBG_INFO("[Main] Free heap: %u bytes", ESP.getFreeHeap());
+    DBG_INFO("[Main] IP: %s", WiFi.localIP().toString().c_str());
 }
 
 // =============================================================

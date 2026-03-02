@@ -3,6 +3,7 @@
 #include <WiFiManager.h>
 #include "config.h"
 #include "types.h"
+#include "debug.h"
 #include "config_manager.h"
 
 // Custom WiFiManager parameters
@@ -20,7 +21,7 @@ void wmSaveParamsCallback() {
     if (wmChatParam) strlcpy(_wmConfigPtr->chatId,   wmChatParam->getValue(), sizeof(_wmConfigPtr->chatId));
     _wmConfigPtr->telegramEnabled = strlen(_wmConfigPtr->botToken) > 0;
     saveConfig(*_wmConfigPtr);
-    Serial.println(F("[WiFi] Params saved from captive portal"));
+    DBG_INFO("[WiFi] Params saved from captive portal");
 }
 
 // Setup WiFi using WiFiManager captive portal
@@ -41,7 +42,7 @@ bool setupWiFi(AppConfig& cfg) {
 
     wm.setSaveParamsCallback(wmSaveParamsCallback);
 
-    Serial.println(F("[WiFi] Starting WiFiManager..."));
+    DBG_INFO("[WiFi] Starting WiFiManager (AP: %s, timeout: %ds)", WIFI_AP_NAME, WIFI_TIMEOUT_SEC);
     bool connected = wm.autoConnect(WIFI_AP_NAME, WIFI_AP_PASSWORD);
 
     // Clean up
@@ -51,9 +52,10 @@ bool setupWiFi(AppConfig& cfg) {
     _wmConfigPtr = nullptr;
 
     if (connected) {
-        Serial.printf("[WiFi] Connected: %s\n", WiFi.localIP().toString().c_str());
+        DBG_INFO("[WiFi] Connected. IP: %s, RSSI: %d dBm",
+                 WiFi.localIP().toString().c_str(), WiFi.RSSI());
     } else {
-        Serial.println(F("[WiFi] Failed to connect, restarting..."));
+        DBG_ERROR("[WiFi] Failed to connect - restarting");
         ESP.restart();
     }
     return connected;
