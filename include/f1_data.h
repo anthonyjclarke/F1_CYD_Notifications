@@ -171,6 +171,17 @@ bool parseSchedule(const String& json) {
              totalRacesLoaded, races[1].round, races[1].name,
              races[1].isSprint ? "Sprint weekend" : "Standard weekend");
 
+    // Log first session timing for countdown debugging.
+    if (races[1].sessionCount > 0) {
+        char firstLocal[48];
+        char gpLocal[48];
+        formatLocalFullDate(races[1].firstSessionUtc, firstLocal, sizeof(firstLocal));
+        formatLocalFullDate(races[1].gpTimeUtc, gpLocal, sizeof(gpLocal));
+        DBG_INFO("[F1] Current race first session (UTC): %ld", (long)races[1].firstSessionUtc);
+        DBG_INFO("[F1] Current race first session (local): %s", firstLocal);
+        DBG_INFO("[F1] Current race GP (local): %s", gpLocal);
+    }
+
     // Populate compact upcoming-races list (all rounds from current onward)
     upcomingCount = 0;
     for (int i = nextIdx; i < (int)racesArr.size() && upcomingCount < 25; i++) {
@@ -282,7 +293,7 @@ bool fetchDriverStandings() {
     DBG_INFO("[F1] Fetching driver standings");
     HTTPClient http;
     char url[128];
-    snprintf(url, sizeof(url), "%s/driverstandings.json?limit=10", JOLPICA_BASE_URL);
+    snprintf(url, sizeof(url), "%s/driverstandings.json?limit=%d", JOLPICA_BASE_URL, STANDINGS_TOP_N);
     http.begin(url);
     http.setTimeout(10000);
     int code = http.GET();
@@ -310,7 +321,7 @@ bool fetchDriverStandings() {
 
     driverStandingsCount = 0;
     for (JsonObject s : standings) {
-        if (driverStandingsCount >= MAX_STANDINGS) break;
+        if (driverStandingsCount >= STANDINGS_TOP_N || driverStandingsCount >= MAX_STANDINGS) break;
         StandingEntry& e = driverStandings[driverStandingsCount];
         e.position = s["position"].as<int>();
         e.points   = (uint16_t)(s["points"].as<float>());
@@ -322,7 +333,8 @@ bool fetchDriverStandings() {
         driverStandingsCount++;
     }
 
-    DBG_INFO("[F1] Driver standings: %d entries. P1: %s (%d pts)",
+    DBG_INFO("[F1] Driver standings Top %d: %d entries. P1: %s (%d pts)",
+             STANDINGS_TOP_N,
              driverStandingsCount,
              driverStandingsCount > 0 ? driverStandings[0].code : "?",
              driverStandingsCount > 0 ? driverStandings[0].points : 0);
@@ -334,7 +346,7 @@ bool fetchConstructorStandings() {
     DBG_INFO("[F1] Fetching constructor standings");
     HTTPClient http;
     char url[128];
-    snprintf(url, sizeof(url), "%s/constructorstandings.json?limit=10", JOLPICA_BASE_URL);
+    snprintf(url, sizeof(url), "%s/constructorstandings.json?limit=%d", JOLPICA_BASE_URL, STANDINGS_TOP_N);
     http.begin(url);
     http.setTimeout(10000);
     int code = http.GET();
@@ -362,7 +374,7 @@ bool fetchConstructorStandings() {
 
     constructorStandingsCount = 0;
     for (JsonObject s : standings) {
-        if (constructorStandingsCount >= MAX_STANDINGS) break;
+        if (constructorStandingsCount >= STANDINGS_TOP_N || constructorStandingsCount >= MAX_STANDINGS) break;
         StandingEntry& e = constructorStandings[constructorStandingsCount];
         e.position = s["position"].as<int>();
         e.points   = (uint16_t)(s["points"].as<float>());
@@ -372,7 +384,8 @@ bool fetchConstructorStandings() {
         constructorStandingsCount++;
     }
 
-    DBG_INFO("[F1] Constructor standings: %d entries. P1: %s (%d pts)",
+    DBG_INFO("[F1] Constructor standings Top %d: %d entries. P1: %s (%d pts)",
+             STANDINGS_TOP_N,
              constructorStandingsCount,
              constructorStandingsCount > 0 ? constructorStandings[0].name : "?",
              constructorStandingsCount > 0 ? constructorStandings[0].points : 0);
@@ -382,11 +395,16 @@ bool fetchConstructorStandings() {
 // Fetch all post-race data
 bool fetchPostRaceData(uint8_t round) {
     DBG_INFO("[F1] Fetching all post-race data for R%d", round);
-    bool ok = fetchRaceResults(round);
-    ok = fetchDriverStandings() && ok;
-    ok = fetchConstructorStandings() && ok;
+    bool resultsOk = fetchRaceResults(round);
+    bool driversOk = fetchDriverStandings();
+    bool constructorsOk = fetchConstructorStandings();
+    bool ok = resultsOk && driversOk && constructorsOk;
     resultsAvailable = ok;
-    DBG_INFO("[F1] Post-race data fetch: %s", ok ? "complete" : "FAILED (will retry)");
+    DBG_INFO("[F1] Post-race data fetch: podium=%s, drivers=%s, constructors=%s",
+             resultsOk ? "ok" : "fail",
+             driversOk ? "ok" : "fail",
+             constructorsOk ? "ok" : "fail");
+    DBG_INFO("[F1] Post-race data fetch: %s", ok ? "complete" : "PARTIAL/FAILED (will retry)");
     return ok;
 }
 

@@ -85,8 +85,10 @@ All application logic lives in header files. `main.cpp` is the only translation 
   - `NOTIFY_HOURS_BEFORE 1` — hours before session to fire Telegram notification
   - `RESULTS_POLL_AFTER_SEC` — start polling results 3h after GP start
   - `SCHEDULE_URL` / `JOLPICA_BASE_URL` — year hardcoded, must update each season
+  - `STANDINGS_TOP_N 5` — number of standings entries to fetch and display
   - `SCREENSHOT_WEB_ENABLED 1` / `SCREENSHOT_BUTTON_ENABLED 0` — screenshot trigger flags
   - `SCREENSHOT_STARTUP_CAPTURES 1` — captures BMP at 5 boot stages; **set to 0 before release builds**
+  - `FORCE_POST_RACE_TEST_DISPLAYS 1` — forces post-race screen rotation skipping time logic; **set to 0 before release builds**
 
 ## Web Endpoints
 | Method   | Path              | Description                               |
@@ -101,14 +103,18 @@ All application logic lives in header files. `main.cpp` is the only translation 
 | POST     | `/api/screenshot` | Trigger SD screenshot capture             |
 | GET      | `/update`         | ElegantOTA firmware update UI             |
 
-## Current State (v0.3.0)
+## Current State (v0.3.0+)
 Core functionality implemented: display state machine, schedule parsing, Telegram notifications, web config UI, OTA, F1 logo branding (TFT + web), season calendar, anti-flicker countdown, and SD screenshot capture. Main outstanding gap is circuit layout images — track screen shows "Track image not available" for all 24 circuits. Not yet tested end-to-end on hardware.
 
+Post-v0.3.0 improvements (uncommitted): timezone-correct day counting (`daysUntilLocalDate()`), fixed `myTZ.tzTime()` UTC_TIME flag throughout, standings limited to top 5 via `STANDINGS_TOP_N`, `FORCE_POST_RACE_TEST_DISPLAYS` test flag, per-fetch diagnostic logging for post-race data.
+
 ## Architecture Notes
-- **Display state machine** (`display_states.h`): `determinePhase()` maps current time vs race timestamps to idle / race-week / post-race. `advanceDisplayState()` rotates sub-states on timer or touch tap.
+- **Display state machine** (`display_states.h`): `determinePhase()` maps current time vs race timestamps to idle / race-week / post-race. Respects `FORCE_POST_RACE_TEST_DISPLAYS` compile flag to bypass time logic for UI testing. `advanceDisplayState()` rotates sub-states on timer or touch tap.
 - **Anti-flicker partial countdown**: `displayPartialUpdate` flag distinguishes 1-second digit ticks (partial) from state transitions (full redraw). `drawCountdown(race, cd, bool partialUpdate)` erases only the number region on partial updates. `static int16_t _prevCountdownDays` forces full redraw at day-boundary transitions.
+- **Timezone-correct day counting** (`time_utils.h`): `daysUntilLocalDate(targetUtc)` converts both now and target to local civil dates using Gregorian day numbers, then diffs — avoids DST/midnight artefacts. All `myTZ.tzTime()` calls use the `UTC_TIME` flag to correctly treat input as UTC. `nowUTC()` returns `::now()` (TimeLib epoch) to avoid timezone-object side effects. Timezone is set before NTP sync so date math is valid even on sync timeout.
 - **F1 logo** (`f1_logo.h`): 118×64 RGB565 PROGMEM. Rendered on white card (`fillRoundRect` + `pushImage`) on TFT (splash screen y=5 and countdown y=66) and web canvas (CSS `background:#fff`). Logo is designed for white backgrounds.
 - **Season calendar** (`f1_data.h`): `UpcomingRace` struct (round, isSprint, name[24], location[16], gpTimeUtc) — up to 25 entries. Populated in `parseSchedule()` from `nextIdx` to season end. Served via `/api/races`; web Schedule tab renders full 2026 table.
+- **Standings display**: `STANDINGS_TOP_N 5` controls both API fetch limit and renderer loop count for driver and constructor standings. Points shown as "N pts". Both `fetchDriverStandings()` and `fetchConstructorStandings()` pass `STANDINGS_TOP_N` as the `?limit=` query param.
 - **Screenshot capture** (`screenshot_capture.h`): SD via HSPI @ 8 MHz. `tft.readRect()` in 16-row chunks, writes 24-bit BMP bottom-up with ESP32 byte-swap. Request-queue model — web/button queues, main loop executes. Filenames: `/shots/shot_YYYYMMDD_HHMMSS.bmp` (user timezone after sync) or `/shots/shot_unsynced_XXXXXX.bmp` before time sync. `utime()` sets file timestamps.
 - **Non-blocking timing**: All periodic tasks use `millis()` — no `delay()` in loop.
 - **Notification deduplication**: Per-round bitmask persisted to LittleFS; not re-sent across reboots.
@@ -122,4 +128,5 @@ Core functionality implemented: display state machine, schedule parsing, Telegra
 - **No WiFi reconnect**: No reconnection attempt if WiFi drops after boot.
 - **NTP server not in captive portal**: Only configurable via web UI after first connect.
 - **`SCREENSHOT_STARTUP_CAPTURES 1`**: Must be set to 0 in `config.h` before release builds.
+- **`FORCE_POST_RACE_TEST_DISPLAYS 1`**: Must be set to 0 in `config.h` before release builds.
 - **`getNextRace()`**: Exists in `f1_data.h` but is unused.

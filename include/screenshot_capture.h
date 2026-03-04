@@ -65,7 +65,7 @@ static void applyFileTimestamp(const char* path) {
         return;
     }
     // FAT timestamps are timezone-less; apply user-configured local clock.
-    time_t ts = myTZ.tzTime(utc);
+    time_t ts = myTZ.tzTime(utc, UTC_TIME);
     struct utimbuf tb;
     tb.actime = ts;
     tb.modtime = ts;
@@ -89,7 +89,7 @@ static void buildScreenshotPath(char* out, size_t len) {
     time_t utc = nowUTC();
     if (utc > 1000000000) {
         tmElements_t tm;
-        breakTime(myTZ.tzTime(utc), tm);
+        breakTime(myTZ.tzTime(utc, UTC_TIME), tm);
 
         // Preferred timestamp format using user-configured local date/time.
         // Example: /shots/shot_20260302_134501.bmp

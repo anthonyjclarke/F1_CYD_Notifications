@@ -62,6 +62,7 @@
 #define COUNTDOWN_WEEK_DAYS     7     // Days before race to start countdown
 #define POST_RACE_DAYS          7     // Days to show post-race data
 #define NOTIFY_HOURS_BEFORE     1     // Hours before session to notify
+#define FORCE_POST_RACE_TEST_DISPLAYS 1  // 1 = force post-race screen rotation for UI testing
 
 // --- Display Colors (RGB565) ---
 #define COLOR_BG            TFT_BLACK
@@ -82,6 +83,7 @@
 #define MAX_RACES            3     // Store prev/current/next
 #define MAX_SESSIONS         7     // Max sessions per race
 #define MAX_STANDINGS        10    // Top 10 standings
+#define STANDINGS_TOP_N      5     // Show/fetch Top 5 standings
 #define MAX_PODIUM           3     // Podium positions
 
 // --- Web Server ---

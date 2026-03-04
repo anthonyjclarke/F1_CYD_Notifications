@@ -347,8 +347,9 @@ void drawDriverStandings() {
     tft.setFreeFont(&FreeSans9pt7b);
     y = 60;
     constexpr int rowH = 19;
+    uint8_t rows = driverStandingsCount < STANDINGS_TOP_N ? driverStandingsCount : STANDINGS_TOP_N;
 
-    for (uint8_t i = 0; i < driverStandingsCount; i++) {
+    for (uint8_t i = 0; i < rows; i++) {
         StandingEntry& e = driverStandings[i];
 
         // Highlight top 3
@@ -359,15 +360,15 @@ void drawDriverStandings() {
 
         char posBuf[4];
         snprintf(posBuf, sizeof(posBuf), "%d", e.position);
-        char ptsBuf[8];
-        snprintf(ptsBuf, sizeof(ptsBuf), "%d", e.points);
+        char ptsBuf[12];
+        snprintf(ptsBuf, sizeof(ptsBuf), "%d pts", e.points);
 
         tft.setTextDatum(ML_DATUM);
         tft.setTextColor(color);
         tft.drawString(posBuf, 15, y);
         tft.drawString(e.code, 50, y);
         tft.setTextColor(COLOR_SESSION_TEXT);
-        tft.drawString(ptsBuf, 270, y);
+        tft.drawString(ptsBuf, 248, y);
 
         y += rowH;
     }
@@ -406,8 +407,9 @@ void drawConstructorStandings() {
     tft.setFreeFont(&FreeSans9pt7b);
     y = 60;
     constexpr int rowH = 19;
+    uint8_t rows = constructorStandingsCount < STANDINGS_TOP_N ? constructorStandingsCount : STANDINGS_TOP_N;
 
-    for (uint8_t i = 0; i < constructorStandingsCount; i++) {
+    for (uint8_t i = 0; i < rows; i++) {
         StandingEntry& e = constructorStandings[i];
 
         uint16_t color = COLOR_TEXT;
@@ -417,15 +419,15 @@ void drawConstructorStandings() {
 
         char posBuf[4];
         snprintf(posBuf, sizeof(posBuf), "%d", e.position);
-        char ptsBuf[8];
-        snprintf(ptsBuf, sizeof(ptsBuf), "%d", e.points);
+        char ptsBuf[12];
+        snprintf(ptsBuf, sizeof(ptsBuf), "%d pts", e.points);
 
         tft.setTextDatum(ML_DATUM);
         tft.setTextColor(color);
         tft.drawString(posBuf, 15, y);
         tft.drawString(e.name, 50, y);
         tft.setTextColor(COLOR_SESSION_TEXT);
-        tft.drawString(ptsBuf, 270, y);
+        tft.drawString(ptsBuf, 248, y);
 
         y += rowH;
     }

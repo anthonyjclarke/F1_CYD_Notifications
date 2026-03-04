@@ -189,6 +189,11 @@ void setup() {
     }
     lastScheduleFetch = millis();
 
+#if FORCE_POST_RACE_TEST_DISPLAYS
+    DBG_INFO("[Main] Test mode enabled: forcing post-race displays and prefetching post-race data");
+    fetchPostRaceData(getCurrentRace().round);
+#endif
+
     // 10. Init Telegram
     DBG_INFO("[Main] 10/12 Telegram: %s", appConfig.telegramEnabled ? "enabled" : "disabled");
     if (appConfig.telegramEnabled) {

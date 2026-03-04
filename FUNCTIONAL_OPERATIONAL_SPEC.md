@@ -97,8 +97,8 @@ Deduplication/state:
 
 Fetched post-race datasets:
 - Podium top 3 for race round.
-- Driver standings top 10.
-- Constructor standings top 10.
+- Driver standings top 5 with current points tally.
+- Constructor standings top 5 with current points tally.
 
 ### 2.7 Web UI and HTTP API
 Server:

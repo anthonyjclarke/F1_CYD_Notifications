@@ -35,10 +35,13 @@ void requestRedraw() {
 
 // Determine what phase we're in based on current time and race data
 DisplayState determinePhase(RaceData& race) {
+#if FORCE_POST_RACE_TEST_DISPLAYS
+    (void)race;
+    return STATE_POST_RACE_WINNER;
+#else
     time_t now = nowUTC();
-    long secsToFirst = race.firstSessionUtc - now;
     long secsAfterGP = now - race.gpTimeUtc;
-    int daysToFirst = secsToFirst / 86400;
+    int daysToFirst = daysUntilLocalDate(race.firstSessionUtc);
     int daysAfterGP = secsAfterGP / 86400;
 
     if (secsAfterGP >= 0 && daysAfterGP < POST_RACE_DAYS) {
@@ -51,6 +54,7 @@ DisplayState determinePhase(RaceData& race) {
         // Idle - between races
         return STATE_IDLE;
     }
+#endif
 }
 
 // Advance to next display state within the current phase
