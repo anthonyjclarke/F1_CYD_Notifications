@@ -6,7 +6,7 @@
 // =============================================================
 
 // --- App Version ---
-#define APP_VERSION         "0.3.0"
+#define APP_VERSION         "0.4.0"
 
 // --- CYD Pin Mapping (v1/v2) ---
 // TFT display pins defined in platformio.ini build_flags

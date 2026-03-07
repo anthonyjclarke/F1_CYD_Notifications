@@ -164,6 +164,16 @@ Notification types:
 
 Duplicate suppression is handled with per-round bitmask persistence in config.
 
+## Web UI
+
+### Config Tab
+
+![Web UI Config](./images/WebUI_Config.jpg)
+
+### Schedule Tab
+
+![Web UI Schedule](./images/WebUI_Schedule.jpg)
+
 ## Web UI and API
 
 Base URL: `http://<device-ip>/`

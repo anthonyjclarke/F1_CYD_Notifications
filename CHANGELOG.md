@@ -17,6 +17,10 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] - 2026-03-08
+
 ### Added
 - SD screenshot capture subsystem (`include/screenshot_capture.h`) with:
   - Web trigger endpoint `POST /api/screenshot`
