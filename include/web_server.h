@@ -51,6 +51,13 @@ button:hover{background:#ff1801}
 .dbg-row{display:flex;align-items:center;gap:8px;margin-top:8px}
 .dbg-row select{width:auto;flex:1;padding:8px}
 a{color:#e10600}
+.about{text-align:center;margin-top:20px;padding-top:14px;border-top:1px solid #2a2a3e;font-size:0.8em}
+.about-links{margin-bottom:6px}
+.about-links a{color:#4caf50;text-decoration:none;font-weight:bold;font-size:1.05em}
+.about-links a:hover{text-decoration:underline}
+.about-built{color:#aaa;margin-bottom:4px}
+.about-credit{color:#555}
+.about-credit a{color:#555}
 .tabs{display:flex;gap:6px;margin-bottom:16px}
 .tab-btn{flex:1;padding:10px;border:1px solid #333;border-radius:6px;background:#16213e;color:#888;font-size:0.95em;cursor:pointer;font-weight:bold}
 .tab-btn.active{background:#e10600;color:#fff;border-color:#e10600}
@@ -130,6 +137,15 @@ td.cd{font-variant-numeric:tabular-nums;color:#666;font-size:0.8em;white-space:n
 <strong>Status:</strong><br>
 Free Heap: <span id="heap">-</span><br>
 Uptime: <span id="uptime">-</span>
+</div>
+<div class="about">
+<div class="about-links">
+<a href="https://github.com/anthonyjclarke/F1_CYD_Notifications" target="_blank">GitHub</a>
+&nbsp;|&nbsp;
+<a href="https://bsky.app/profile/anthonyjclarke.bsky.social" target="_blank">Bluesky</a>
+</div>
+<div class="about-built">Built with &#10084; by Anthony Clarke</div>
+<div class="about-credit">Based on original idea by <a href="https://github.com/witnessmenow/F1-Arduino-Notifications" target="_blank">@witnessmenow</a></div>
 </div>
 </div>
 
