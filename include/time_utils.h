@@ -71,6 +71,7 @@ struct Countdown {
     int minutes;
     int seconds;
     bool expired;
+    bool isOnNow;  // True if target session is currently running
 };
 
 // Convert a civil date to a monotonic day number (Gregorian calendar).
@@ -102,12 +103,54 @@ int daysUntilLocalDate(time_t targetUtc) {
 }
 
 Countdown getCountdown(time_t targetUtc) {
-    Countdown cd = {0, 0, 0, 0, false};
+    Countdown cd = {0, 0, 0, 0, false, false};
     time_t now = nowUTC();
     if (targetUtc <= now) {
         cd.expired = true;
         return cd;
     }
+    time_t diff = targetUtc - now;
+    cd.days    = daysUntilLocalDate(targetUtc);
+    cd.hours   = (diff % 86400) / 3600;
+    cd.minutes = (diff % 3600) / 60;
+    cd.seconds = diff % 60;
+    return cd;
+}
+
+// Get session duration in seconds based on session type
+uint16_t getSessionDurationSeconds(SessionType type) {
+    switch (type) {
+        case SESSION_FP1:               return 3600;  // 60 minutes
+        case SESSION_FP2:               return 3600;  // 60 minutes
+        case SESSION_FP3:               return 3600;  // 60 minutes
+        case SESSION_SPRINT_QUALIFYING: return 1800;  // 30 minutes
+        case SESSION_SPRINT:            return 5400;  // 90 minutes (conservative)
+        case SESSION_QUALIFYING:        return 3600;  // 60 minutes
+        case SESSION_GP:                return 7200;  // ~120 minutes (average, actual varies)
+        default:                        return 3600;
+    }
+}
+
+// Get countdown with session "on now" detection
+Countdown getCountdownWithSession(time_t targetUtc, SessionType sessionType) {
+    Countdown cd = {0, 0, 0, 0, false, false};
+    time_t now = nowUTC();
+    uint16_t durationSecs = getSessionDurationSeconds(sessionType);
+    time_t sessionEndTime = targetUtc + durationSecs;
+
+    // Check if session is currently running
+    if (now >= targetUtc && now < sessionEndTime) {
+        cd.isOnNow = true;
+        cd.expired = false;
+        return cd;
+    }
+
+    // Not running - return countdown to start
+    if (targetUtc <= now) {
+        cd.expired = true;
+        return cd;
+    }
+
     time_t diff = targetUtc - now;
     cd.days    = daysUntilLocalDate(targetUtc);
     cd.hours   = (diff % 86400) / 3600;

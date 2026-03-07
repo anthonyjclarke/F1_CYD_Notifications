@@ -33,6 +33,67 @@ void requestRedraw() {
     displayPartialUpdate = false;
 }
 
+// Helper: compare local dates (return true if same day in local timezone)
+static bool isSameLocalDay(time_t utc1, time_t utc2) {
+    tmElements_t tm1, tm2;
+    breakTime(myTZ.tzTime(utc1, UTC_TIME), tm1);
+    breakTime(myTZ.tzTime(utc2, UTC_TIME), tm2);
+    return (tm1.Year == tm2.Year && tm1.Month == tm2.Month && tm1.Day == tm2.Day);
+}
+
+// Structure to hold both countdown target and session type
+struct CountdownTarget {
+    time_t utcTime;
+    SessionType sessionType;
+};
+
+// Determine the countdown target: if today is an event day in the race weekend,
+// count down to the next/current session on that day; otherwise to first session
+static CountdownTarget getCountdownTarget(RaceData& race) {
+    time_t now = nowUTC();
+
+    // Check if any session is scheduled for today (local date)
+    for (uint8_t i = 0; i < race.sessionCount; i++) {
+        time_t sessionTime = race.sessions[i].utcTime;
+        SessionType sessionType = race.sessions[i].type;
+
+        // If this session is on today's date
+        if (isSameLocalDay(now, sessionTime)) {
+            // Check if session is currently running
+            uint16_t durationSecs = getSessionDurationSeconds(sessionType);
+            time_t sessionEndTime = sessionTime + durationSecs;
+
+            if (now >= sessionTime && now < sessionEndTime) {
+                // Session is currently running - return it
+                return {sessionTime, sessionType};
+            } else if (sessionTime > now) {
+                // Session hasn't started yet - return it
+                return {sessionTime, sessionType};
+            }
+            // Session has ended - continue looking for other sessions today
+        }
+    }
+
+    // No event today - find the next upcoming session in the season
+    // First check if there are future sessions in the current race
+    for (uint8_t i = 0; i < race.sessionCount; i++) {
+        if (race.sessions[i].utcTime > now) {
+            return {race.sessions[i].utcTime, race.sessions[i].type};
+        }
+    }
+
+    // No future sessions in current race - check upcoming races
+    for (uint8_t i = 0; i < upcomingCount; i++) {
+        if (upcomingRaces[i].gpTimeUtc > now) {
+            // For upcoming races, return the GP time as the target
+            return {upcomingRaces[i].gpTimeUtc, SESSION_GP};
+        }
+    }
+
+    // Fallback to first session of current race (shouldn't happen in normal operation)
+    return {race.firstSessionUtc, race.sessions[0].type};
+}
+
 // Determine what phase we're in based on current time and race data
 DisplayState determinePhase(RaceData& race) {
 #if FORCE_POST_RACE_TEST_DISPLAYS
@@ -104,12 +165,14 @@ void renderCurrentState(RaceData& race) {
 
     switch (currentDisplayState) {
         case STATE_IDLE: {
-            Countdown cd = getCountdown(race.firstSessionUtc);
+            CountdownTarget target = getCountdownTarget(race);
+            Countdown cd = getCountdownWithSession(target.utcTime, target.sessionType);
             drawCountdown(race, cd, partial);
             break;
         }
         case STATE_RACE_WEEK_COUNTDOWN: {
-            Countdown cd = getCountdown(race.firstSessionUtc);
+            CountdownTarget target = getCountdownTarget(race);
+            Countdown cd = getCountdownWithSession(target.utcTime, target.sessionType);
             drawCountdown(race, cd, partial);
             break;
         }

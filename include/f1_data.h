@@ -75,6 +75,16 @@ static void addSession(RaceData& race, SessionType type, const char* isoTime) {
     race.sessionCount++;
 }
 
+// Recalculate session times for a race after timezone change
+static void updateSessionTimesForRace(RaceData& race) {
+    for (uint8_t i = 0; i < race.sessionCount; i++) {
+        SessionInfo& s = race.sessions[i];
+        formatLocalDay(s.utcTime, s.dayAbbrev, sizeof(s.dayAbbrev));
+        formatLocalTime(s.utcTime, s.localTime, sizeof(s.localTime));
+    }
+    DBG_INFO("[F1] Updated session times for race '%s' after timezone change", race.name);
+}
+
 // Parse the sportstimes JSON and find relevant races
 bool parseSchedule(const String& json) {
     DBG_INFO("[F1] Parsing schedule JSON (%d bytes)", json.length());
@@ -139,8 +149,8 @@ bool parseSchedule(const String& json) {
         strlcpy(rd.slug,     race["slug"]     | "",        sizeof(rd.slug));
         rd.round = race["round"] | 0;
 
-        JsonObject sessions = race["sessions"];
-        rd.isSprint = sessions.containsKey("sprint");
+        JsonObjectConst sessions = race["sessions"].as<JsonObjectConst>();
+        rd.isSprint = !sessions["sprint"].isNull();
 
         DBG_VERBOSE("[F1] R%d %s (%s%s)", rd.round, rd.name, rd.location,
                     rd.isSprint ? " - Sprint" : "");
@@ -188,10 +198,11 @@ bool parseSchedule(const String& json) {
         JsonObject r = racesArr[i];
         UpcomingRace& ur = upcomingRaces[upcomingCount];
         ur.round    = r["round"] | 0;
-        ur.isSprint = r["sessions"].containsKey("sprint");
+        JsonObjectConst upcomingSessions = r["sessions"].as<JsonObjectConst>();
+        ur.isSprint = !upcomingSessions["sprint"].isNull();
         strlcpy(ur.name,     r["name"]     | "Unknown", sizeof(ur.name));
         strlcpy(ur.location, r["location"] | "",        sizeof(ur.location));
-        ur.gpTimeUtc = parseISO8601(r["sessions"]["gp"]);
+        ur.gpTimeUtc = parseISO8601(upcomingSessions["gp"]);
         upcomingCount++;
     }
     DBG_INFO("[F1] Upcoming races: %d (from R%d to end of season)", upcomingCount,
