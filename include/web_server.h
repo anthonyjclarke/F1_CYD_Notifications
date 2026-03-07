@@ -12,7 +12,9 @@
 #include "f1_logo.h"
 #include "time_utils.h"
 #include "display_renderer.h"
+#include "display_states.h"
 #include "screenshot_capture.h"
+#include "timezone_ntp_options.h"
 
 static AsyncWebServer server(WEB_SERVER_PORT);
 static AppConfig* _webConfigPtr = nullptr;
@@ -85,10 +87,10 @@ td.cd{font-variant-numeric:tabular-nums;color:#666;font-size:0.8em;white-space:n
 <div id="tab-cfg">
 <form id="configForm">
 <h2>Timezone &amp; NTP</h2>
-<label for="tz">Timezone (IANA format)</label>
-<input type="text" id="tz" name="tz" placeholder="Europe/London">
+<label for="tz">Timezone</label>
+<select id="tz" name="tz"></select>
 <label for="ntp">NTP Server</label>
-<input type="text" id="ntp" name="ntp" placeholder="pool.ntp.org">
+<select id="ntp" name="ntp"></select>
 
 <h2>Display</h2>
 <label>Brightness (0 = Auto)</label>
@@ -184,8 +186,8 @@ async function loadConfig() {
   try {
     const r = await fetch('/api/config');
     const c = await r.json();
-    $('tz').value   = c.tz     || '';
-    $('ntp').value  = c.ntp    || '';
+    $('tz').value   = c.tz     || 'Europe/London';
+    $('ntp').value  = c.ntp    || 'pool.ntp.org';
     $('bot').value  = c.bot    || '';
     $('chat').value = c.chat   || '';
     bright.value    = c.bright || 128;
@@ -223,16 +225,60 @@ async function captureShot() {
     const r = await fetch('/api/screenshot', {method:'POST'});
     const d = await r.json();
     msg.className = r.ok ? 'msg ok' : 'msg err';
-    msg.textContent = r.ok
-      ? ('Screenshot queued: ' + (d.path || '(writing...)'))
-      : (d.error || 'Screenshot failed');
+    if (r.ok && d.ram) {
+      // No SD card — captured to RAM; poll then show download link
+      msg.innerHTML = 'Capturing to RAM&hellip; <a id="dlLink" style="color:#4caf50;display:none;text-decoration:underline;" href="/api/screenshot/download?ram=1" download="screenshot.bmp">Download</a>';
+      msg.style.display = 'block';
+      let attempts = 0;
+      const checkReady = async () => {
+        attempts++;
+        try {
+          const chk = await fetch('/api/screenshot/status');
+          const st = await chk.json();
+          if (st.ram_ready) {
+            const link = $('dlLink');
+            if (link) link.style.display = 'inline';
+            return;
+          }
+        } catch(_) {}
+        if (attempts < 40) setTimeout(checkReady, 250);
+      };
+      setTimeout(checkReady, 200);
+    } else if (r.ok && d.queued) {
+      // SD card path — poll until capture completes, then show download link
+      msg.textContent = 'Capturing\u2026';
+      msg.style.display = 'block';
+      let attempts = 0;
+      const checkDone = async () => {
+        attempts++;
+        try {
+          const chk = await fetch('/api/screenshot/status');
+          const st = await chk.json();
+          if (!st.busy && st.lastPath) {
+            const filename = st.lastPath.split('/').pop();
+            const url = `/api/screenshot/download?file=${encodeURIComponent(filename)}`;
+            msg.innerHTML = `Screenshot saved: <a href="${url}" target="_blank" style="color:#4caf50;text-decoration:underline;">${st.lastPath}</a>`;
+            return;
+          } else if (!st.busy && st.lastError) {
+            msg.className = 'msg err';
+            msg.textContent = 'Screenshot failed: ' + st.lastError;
+            return;
+          }
+        } catch(_) {}
+        if (attempts < 40) setTimeout(checkDone, 250);
+        else msg.textContent = 'Screenshot timed out';
+      };
+      setTimeout(checkDone, 200);
+    } else {
+      msg.textContent = d.error || 'Screenshot failed';
+    }
     msg.style.display = 'block';
   } catch(e) {
     msg.className = 'msg err';
     msg.textContent = 'Screenshot error: ' + e.message;
     msg.style.display = 'block';
   }
-  setTimeout(() => msg.style.display = 'none', 3500);
+  setTimeout(() => msg.style.display = 'none', 12000);
 }
 
 $('configForm').onsubmit = async (e) => {
@@ -343,7 +389,46 @@ async function loadRaces() {
   }
 }
 
+// Populate timezone and NTP server select options
+function populateSelects() {
+  const tzOpts = [
+    'UTC',
+    'Europe/London','Europe/Paris','Europe/Amsterdam','Europe/Berlin','Europe/Rome','Europe/Madrid',
+    'Europe/Zurich','Europe/Vienna','Europe/Brussels','Europe/Prague','Europe/Warsaw','Europe/Moscow','Europe/Istanbul',
+    'America/New_York','America/Toronto','America/Chicago','America/Denver','America/Los_Angeles','America/Anchorage',
+    'America/Mexico_City','America/Bogota','America/Buenos_Aires','America/Sao_Paulo',
+    'Asia/Dubai','Asia/Bangkok','Asia/Hong_Kong','Asia/Shanghai','Asia/Tokyo','Asia/Seoul','Asia/Singapore','Asia/Kolkata',
+    'Australia/Sydney','Australia/Melbourne','Australia/Brisbane','Australia/Perth',
+    'Africa/Johannesburg','Africa/Cairo','Africa/Lagos',
+    'GMT-12','GMT-11','GMT-10','GMT-9','GMT-8','GMT-7','GMT-6','GMT-5','GMT-4','GMT-3','GMT-2','GMT-1',
+    'GMT+0','GMT+1','GMT+2','GMT+3','GMT+4','GMT+5','GMT+6','GMT+7','GMT+8','GMT+9','GMT+10','GMT+11','GMT+12','GMT+13','GMT+14'
+  ];
+  const ntpOpts = [
+    'pool.ntp.org','time.nist.gov','time.google.com','time.cloudflare.com',
+    '0.pool.ntp.org','1.pool.ntp.org','2.pool.ntp.org','3.pool.ntp.org',
+    'time.apple.com','time.windows.com','ntp.ubuntu.com','0.amazon.pool.ntp.org',
+    'time1.google.com','time2.google.com'
+  ];
+  
+  const tzSel = $('tz');
+  tzOpts.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o;
+    opt.textContent = o;
+    tzSel.appendChild(opt);
+  });
+  
+  const ntpSel = $('ntp');
+  ntpOpts.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o;
+    opt.textContent = o;
+    ntpSel.appendChild(opt);
+  });
+}
+
 renderLogo();
+populateSelects();
 loadConfig();
 loadStatus();
 loadDebug();
@@ -361,12 +446,12 @@ void setupWebServer(AppConfig& cfg) {
 
     // Serve config page
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
-        request->send_P(200, "text/html", INDEX_HTML);
+        request->send(200, "text/html", INDEX_HTML);
     });
 
     // Serve F1 logo as raw RGB565 bytes (PROGMEM → browser canvas)
     server.on("/logo.raw", HTTP_GET, [](AsyncWebServerRequest* request) {
-        AsyncWebServerResponse* resp = request->beginResponse_P(
+        AsyncWebServerResponse* resp = request->beginResponse(
             200, "application/octet-stream",
             (const uint8_t*)f1_logo, sizeof(f1_logo));
         resp->addHeader("Cache-Control", "max-age=86400");
@@ -414,9 +499,16 @@ void setupWebServer(AppConfig& cfg) {
         // Re-init timezone if changed
         initTime(_webConfigPtr->timezone, _webConfigPtr->ntpServer);
 
+        // Update session times for current race after timezone change
+        updateSessionTimesForRace(races[currentRaceIdx]);
+        
+        // Force display redraw to reflect new times
+        requestRedraw();
+
         saveConfig(*_webConfigPtr);
         request->send(200, "application/json", "{\"ok\":true}");
         DBG_INFO("[Web] Config updated via web UI");
+
     });
 
     // GET status
@@ -501,30 +593,85 @@ void setupWebServer(AppConfig& cfg) {
     });
 
 #if SCREENSHOT_WEB_ENABLED
-    // POST screenshot capture request (queued for loop execution)
-    server.on("/api/screenshot", HTTP_POST, [](AsyncWebServerRequest* request) {
+    // GET screenshot capture status (for client polling)
+    server.on("/api/screenshot/status", HTTP_GET, [](AsyncWebServerRequest* request) {
         JsonDocument doc;
+        doc["sd_ready"]  = isScreenshotReady();
+        doc["ram_ready"] = isScreenshotRamReady();
+        doc["busy"]      = isScreenshotBusy();
+        doc["lastPath"]  = getLastScreenshotPath();
+        doc["lastError"] = getLastScreenshotError();
+        String json;
+        serializeJson(doc, json);
+        request->send(200, "application/json", json);
+    });
 
-        if (!isScreenshotReady()) {
-            doc["ok"] = false;
-            doc["error"] = "SD not ready";
-            String json;
-            serializeJson(doc, json);
-            request->send(503, "application/json", json);
+    // GET screenshot download — ?file=<name> for SD card, ?ram=1 for RAM capture
+    server.on("/api/screenshot/download", HTTP_GET, [](AsyncWebServerRequest* request) {
+        // RAM path
+        if (request->hasParam("ram")) {
+            if (!isScreenshotRamReady()) {
+                request->send(503, "application/json", "{\"error\":\"RAM capture not ready\"}");
+                return;
+            }
+            // ESPAsyncWebServer 3.x filler overload: no status code arg (defaults to 200)
+            AsyncWebServerResponse* resp = request->beginResponse(
+                "image/bmp", getScreenshotRamSize(),
+                [](uint8_t* dst, size_t maxLen, size_t index) -> size_t {
+                    const uint8_t* src = getScreenshotRamBuf();
+                    size_t total = getScreenshotRamSize();
+                    if (!src || index >= total) return 0;
+                    size_t toCopy = min(maxLen, total - index);
+                    memcpy(dst, src + index, toCopy);
+                    return toCopy;
+                }
+            );
+            resp->addHeader("Content-Disposition", "attachment; filename=\"screenshot.bmp\"");
+            resp->addHeader("Cache-Control", "no-store");
+            request->send(resp);
             return;
         }
 
-        bool queued = requestScreenshot("web");
-        doc["ok"] = queued;
-        doc["queued"] = queued;
-        doc["path"] = getLastScreenshotPath();
-        doc["lastError"] = getLastScreenshotError();
-        if (!queued) {
-            doc["error"] = "Queue failed";
+        // SD path
+        if (!isScreenshotReady()) {
+            request->send(503, "application/json", "{\"error\":\"SD not ready\"}");
+            return;
         }
+        if (!request->hasParam("file")) {
+            request->send(400, "application/json", "{\"error\":\"Missing file parameter\"}");
+            return;
+        }
+        String fullPath = "/shots/" + request->getParam("file")->value();
+        if (!SD.exists(fullPath)) {
+            request->send(404, "application/json", "{\"error\":\"File not found\"}");
+            return;
+        }
+        request->send(SD, fullPath, "image/bmp", true);
+    });
+
+    // POST screenshot capture — queued for main-loop execution
+    // Works with or without SD card: SD path saves to file, RAM path captures to heap buffer.
+    server.on("/api/screenshot", HTTP_POST, [](AsyncWebServerRequest* request) {
+        JsonDocument doc;
+
+        if (isScreenshotReady()) {
+            // SD card present: capture to file; client polls /api/screenshot/status for result
+            bool queued = requestScreenshot("web");
+            doc["ok"] = queued;
+            doc["queued"] = queued;
+            if (!queued) doc["error"] = "Queue failed";
+        } else {
+            // No SD card: capture to RAM buffer
+            bool queued = requestScreenshotToRam();
+            doc["ok"] = queued;
+            doc["queued"] = queued;
+            doc["ram"] = true;
+            if (!queued) doc["error"] = getLastScreenshotError();
+        }
+
         String json;
         serializeJson(doc, json);
-        request->send(queued ? 200 : 500, "application/json", json);
+        request->send(doc["ok"] ? 200 : 500, "application/json", json);
     });
 #endif
 

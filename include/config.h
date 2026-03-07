@@ -49,30 +49,30 @@
 
 // --- Timing Constants ---
 #define SCHEDULE_REFRESH_MS     (24UL * 60 * 60 * 1000)  // 24 hours
-#define RESULTS_RETRY_MS        (30UL * 60 * 1000)        // 30 minutes
-#define RESULTS_POLL_AFTER_SEC  (3 * 60 * 60)             // 3 hours after GP
-#define RESULTS_GIVE_UP_SEC     (24 * 60 * 60)            // Stop retrying after 24h
-#define DISPLAY_ROTATE_MS       8000                       // Screen rotation
-#define POST_RACE_ROTATE_MS     10000                      // Post-race rotation
-#define COUNTDOWN_UPDATE_MS     1000                       // 1 second
-#define NOTIFICATION_CHECK_MS   (60UL * 1000)              // 1 minute
-#define BRIGHTNESS_CHECK_MS     (10UL * 1000)              // 10 seconds
+#define RESULTS_RETRY_MS        (30UL * 60 * 1000)       // 30 minutes
+#define RESULTS_POLL_AFTER_SEC  (3 * 60 * 60)            // 3 hours after GP
+#define RESULTS_GIVE_UP_SEC     (24 * 60 * 60)           // Stop retrying after 24h
+#define DISPLAY_ROTATE_MS       8000                     // Screen rotation
+#define POST_RACE_ROTATE_MS     10000                    // Post-race rotation
+#define COUNTDOWN_UPDATE_MS     1000                     // 1 second
+#define NOTIFICATION_CHECK_MS   (60UL * 1000)            // 1 minute
+#define BRIGHTNESS_CHECK_MS     (10UL * 1000)            // 10 seconds
 
 // --- Race Week ---
-#define COUNTDOWN_WEEK_DAYS     7     // Days before race to start countdown
-#define POST_RACE_DAYS          7     // Days to show post-race data
-#define NOTIFY_HOURS_BEFORE     1     // Hours before session to notify
-#define FORCE_POST_RACE_TEST_DISPLAYS 1  // 1 = force post-race screen rotation for UI testing
+#define COUNTDOWN_WEEK_DAYS     7           // Days before race to start countdown
+#define POST_RACE_DAYS          7           // Days to show post-race data
+#define NOTIFY_HOURS_BEFORE     1           // Hours before session to notify
+#define FORCE_POST_RACE_TEST_DISPLAYS 0     // 1 = force post-race screen rotation for UI testing
 
 // --- Display Colors (RGB565) ---
 #define COLOR_BG            TFT_BLACK
 #define COLOR_F1_RED        0xF800
 #define COLOR_TEXT           TFT_WHITE
-#define COLOR_GRID           0x4208    // Dark gray
-#define COLOR_HIGHLIGHT      0xFFE0    // Yellow
+#define COLOR_GRID           0x4208     // Dark gray
+#define COLOR_HIGHLIGHT      0xFFE0     // Yellow
 #define COLOR_COUNTDOWN      TFT_WHITE
-#define COLOR_TRACK          0xF800    // Red
-#define COLOR_HEADER_BG      0xF800    // F1 Red
+#define COLOR_TRACK          0xF800     // Red
+#define COLOR_HEADER_BG      0xF800     // F1 Red
 #define COLOR_HEADER_TEXT     TFT_WHITE
 #define COLOR_SESSION_TEXT    0xCE59    // Light gray
 #define COLOR_PODIUM_GOLD    0xFEA0

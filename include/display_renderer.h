@@ -5,6 +5,7 @@
 #include "types.h"
 #include "time_utils.h"
 #include "f1_logo.h"
+#include "f1_race_car.h"
 
 static TFT_eSPI tft = TFT_eSPI();
 
@@ -151,15 +152,59 @@ void drawScheduleTable(RaceData& race) {
 
 // Track last-drawn days value to force full redraw on day-boundary transitions
 static int16_t _prevCountdownDays = -1;
+static bool _prevOnNow = false;
 
 void drawCountdown(RaceData& race, Countdown& cd, bool partialUpdate = false) {
+    // Force full redraw when isOnNow state changes
+    if (cd.isOnNow != _prevOnNow) {
+        partialUpdate = false;
+    }
     // Force full redraw when the days value changes (day rolls over, or 1→0 transition)
     if (cd.days != _prevCountdownDays) {
         partialUpdate = false;
     }
     _prevCountdownDays = cd.days;
+    _prevOnNow = cd.isOnNow;
 
     char countBuf[16];
+
+    // --- Handle "On Now" state ---
+    if (cd.isOnNow) {
+        if (!partialUpdate) {
+            tft.fillScreen(COLOR_BG);
+
+            tft.fillRect(0, 0, SCREEN_WIDTH, 24, COLOR_F1_RED);
+            tft.setTextColor(COLOR_HEADER_TEXT);
+            tft.setTextDatum(MC_DATUM);
+            tft.setFreeFont(&FreeSansBold9pt7b);
+            tft.drawString("SESSION ON NOW", SCREEN_WIDTH / 2, 12);
+
+            tft.setFreeFont(&FreeSans12pt7b);
+            tft.setTextColor(COLOR_TEXT);
+            tft.drawString(race.name, SCREEN_WIDTH / 2, 48);
+            tft.setFreeFont(&FreeSans9pt7b);
+            tft.setTextColor(COLOR_SESSION_TEXT);
+            tft.drawString(race.location, SCREEN_WIDTH / 2, 66);
+        }
+
+        // Display race car image
+        constexpr int16_t carX = (SCREEN_WIDTH - F1_CAR_WIDTH) / 2;
+        constexpr int16_t carY = 100;
+        tft.fillRect(0, carY - 10, SCREEN_WIDTH, F1_CAR_HEIGHT + 20, COLOR_BG);
+        tft.pushImage(carX, carY, F1_CAR_WIDTH, F1_CAR_HEIGHT, f1_race_car);
+
+        // "On Now" text
+        tft.setFreeFont(&FreeMonoBold24pt7b);
+        tft.setTextColor(COLOR_F1_RED);
+        tft.setTextDatum(MC_DATUM);
+        tft.drawString("ON", SCREEN_WIDTH / 2, 180);
+
+        tft.setFreeFont(&FreeSans9pt7b);
+        tft.setTextColor(COLOR_TEXT);
+        tft.drawString("NOW!", SCREEN_WIDTH / 2, 210);
+
+        return;
+    }
 
     // --- Full redraw: background + all static elements ---
     if (!partialUpdate) {

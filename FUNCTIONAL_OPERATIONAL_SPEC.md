@@ -61,6 +61,7 @@ Rotation behavior:
 - Race week states rotate every 8s.
 - Post-race states rotate every 10s.
 - Countdown digits refresh every 1s with partial redraw to reduce flicker.
+- During active F1 sessions (FP1, FP2, FP3, Qualifying, Sprint Qualifying, Sprint, Race), countdown automatically switches to "On Now" display with F1 racing car image.
 - Touch press manually advances to next state in current phase.
 
 Track layouts:
@@ -116,17 +117,23 @@ Endpoints:
 - `GET /api/races` compact upcoming season list.
 - `GET /api/debug` get runtime debug level.
 - `POST /api/debug` set runtime debug level (0-4).
-- `POST /api/screenshot` queue screenshot capture.
+- `POST /api/screenshot` queue screenshot capture (SD or RAM depending on SD availability).
+- `GET /api/screenshot/status` poll capture state: `{sd_ready, ram_ready, busy, lastPath, lastError}`.
+- `GET /api/screenshot/download?file=<name>` download named BMP from SD.
+- `GET /api/screenshot/download?ram=1` download RAM-captured BMP.
 
 ### 2.8 Screenshot Capture
-- Saves TFT captures as 24-bit BMP files to SD folder `/shots`.
+- Saves TFT captures as 24-bit BMP files to SD folder `/shots` when SD card is present.
+- Falls back to RAM buffer capture when no SD card is available.
 - Trigger sources:
-  - Web endpoint (`POST /api/screenshot`)
+  - Web endpoint (`POST /api/screenshot`) — uses request-queue model; actual capture runs in main loop
   - Optional physical button (`PIN_SHOT_BTN`, active LOW, debounce)
   - Optional startup capture points controlled by `SCREENSHOT_STARTUP_CAPTURES`
+- Web UI polls `GET /api/screenshot/status` (250 ms interval) after queuing until `busy` clears, then presents a download link using `lastPath`.
 - Naming behavior:
   - Time synced: `shot_YYYYMMDD_HHMMSS.bmp` (user timezone)
   - Time unsynced: `shot_unsynced_XXXXXX.bmp`
+- Note: TFT_eSPI `pushImage` with PROGMEM data on ESP32 must not use a transparency key colour — ESP32 SPI byte-swap causes the key comparison to fail. Images intended for black backgrounds use `0x0000` background pixels instead.
 
 ## 3. Operational Specification
 

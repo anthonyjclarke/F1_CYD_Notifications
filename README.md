@@ -14,6 +14,8 @@ The device shows upcoming F1 sessions, race-week countdown, and post-race data o
 
 - Connects to Wi-Fi with captive portal onboarding (WiFiManager)
 - Syncs NTP time using configurable timezone (IANA format)
+ - Syncs NTP time using configurable timezone (IANA format)
+ - Web UI provides curated dropdowns for Timezone and NTP server; saving a new timezone immediately recalculates all session local times and forces the TFT display to refresh so schedule times reflect the chosen zone
 - Fetches 2026 F1 schedule from Sportstimes JSON
 - Displays rotating race-week and post-race screens on TFT
 - Polls post-race results/standings from Jolpica API
@@ -170,12 +172,15 @@ Base URL: `http://<device-ip>/`
 - `GET /update` OTA page
 - `GET /api/config` current config JSON
 - `POST /api/config` update config
+  - Timezone and NTP server can be selected from curated dropdowns in the Web UI
 - `GET /api/status` heap/uptime/IP
 - `GET /api/schedule` current race sessions
 - `GET /api/races` upcoming rounds list
 - `GET /api/debug` get debug level
 - `POST /api/debug` set debug level (0..4)
-- `POST /api/screenshot` queue TFT screenshot capture to MicroSD
+- `POST /api/screenshot` queue TFT screenshot capture (SD card or RAM fallback)
+- `GET /api/screenshot/status` poll capture state (`busy`, `lastPath`, `lastError`)
+- `GET /api/screenshot/download` download captured BMP (SD file or RAM buffer)
 
 ## Screenshot Capture (MicroSD)
 
@@ -191,6 +196,11 @@ Trigger options:
 - Web UI button: **Capture TFT Screenshot**
 - Web API: `POST /api/screenshot`
 - Optional physical button (active LOW, `INPUT_PULLUP`) on `PIN_SHOT_BTN`
+
+Download options:
+- Web UI button: **Capture TFT Screenshot** — polls for completion then shows download link
+- Web API: `GET /api/screenshot/download?file=<name>` (SD) or `?ram=1` (RAM fallback)
+- Status polling: `GET /api/screenshot/status` → `{sd_ready, ram_ready, busy, lastPath, lastError}`
 
 Physical switch wiring (example):
 
