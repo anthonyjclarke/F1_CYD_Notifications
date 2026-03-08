@@ -36,6 +36,12 @@ static char screenshotLastError[64] = "";
 static unsigned long screenshotSeq = 0;
 static const uint8_t SCREENSHOT_CHUNK_ROWS = 16;
 
+// RAM capture state (used when no SD card is present)
+static uint8_t* screenshotRamBuf = nullptr;
+static size_t screenshotRamBufSize = 0;
+static bool screenshotRamReady = false;
+static volatile uint8_t screenshotRamPending = 0;
+
 static void writeLE16(File& f, uint16_t v) {
     f.write((uint8_t)(v & 0xFF));
     f.write((uint8_t)((v >> 8) & 0xFF));
@@ -46,6 +52,19 @@ static void writeLE32(File& f, uint32_t v) {
     f.write((uint8_t)((v >> 8) & 0xFF));
     f.write((uint8_t)((v >> 16) & 0xFF));
     f.write((uint8_t)((v >> 24) & 0xFF));
+}
+
+// Buffer variants for RAM capture (write into a uint8_t* and advance pointer)
+static void writeBufLE16(uint8_t*& p, uint16_t v) {
+    *p++ = v & 0xFF;
+    *p++ = (v >> 8) & 0xFF;
+}
+
+static void writeBufLE32(uint8_t*& p, uint32_t v) {
+    *p++ = v & 0xFF;
+    *p++ = (v >> 8) & 0xFF;
+    *p++ = (v >> 16) & 0xFF;
+    *p++ = (v >> 24) & 0xFF;
 }
 
 static bool ensureScreenshotDir() {
@@ -65,7 +84,7 @@ static void applyFileTimestamp(const char* path) {
         return;
     }
     // FAT timestamps are timezone-less; apply user-configured local clock.
-    time_t ts = myTZ.tzTime(utc);
+    time_t ts = myTZ.tzTime(utc, UTC_TIME);
     struct utimbuf tb;
     tb.actime = ts;
     tb.modtime = ts;
@@ -89,7 +108,7 @@ static void buildScreenshotPath(char* out, size_t len) {
     time_t utc = nowUTC();
     if (utc > 1000000000) {
         tmElements_t tm;
-        breakTime(myTZ.tzTime(utc), tm);
+        breakTime(myTZ.tzTime(utc, UTC_TIME), tm);
 
         // Preferred timestamp format using user-configured local date/time.
         // Example: /shots/shot_20260302_134501.bmp
@@ -166,6 +185,132 @@ const char* getLastScreenshotError() {
     return screenshotLastError;
 }
 
+bool isScreenshotRamReady() {
+    return screenshotRamReady;
+}
+
+const uint8_t* getScreenshotRamBuf() {
+    return screenshotRamBuf;
+}
+
+size_t getScreenshotRamSize() {
+    return screenshotRamBufSize;
+}
+
+void clearScreenshotRam() {
+    if (screenshotRamBuf) {
+        free(screenshotRamBuf);
+        screenshotRamBuf = nullptr;
+    }
+    screenshotRamBufSize = 0;
+    screenshotRamReady = false;
+}
+
+// Queue a RAM-backed screenshot capture (used when no SD card is available).
+// Returns false immediately if there is insufficient heap.
+bool requestScreenshotToRam() {
+    constexpr uint32_t needed = SCREEN_WIDTH * SCREEN_HEIGHT * 3UL + 54
+                                + (size_t)SCREEN_WIDTH * SCREENSHOT_CHUNK_ROWS * 2;  // chunk565 buffer
+    if (ESP.getFreeHeap() < needed + 20480) {
+        snprintf(screenshotLastError, sizeof(screenshotLastError),
+                 "low heap (%u B)", (unsigned)ESP.getFreeHeap());
+        DBG_WARN("[Shot] RAM capture refused: need ~%u B, have %u B",
+                 needed + 20480, (unsigned)ESP.getFreeHeap());
+        return false;
+    }
+    if (screenshotRamPending < 255) screenshotRamPending++;
+    DBG_INFO("[Shot] RAM capture queued, pending=%u", screenshotRamPending);
+    return true;
+}
+
+// Capture the full TFT into a heap-allocated 24-bit BMP.
+// Must be called from the main loop (same context as all other TFT operations).
+static bool captureScreenshotToRam() {
+    if (screenshotBusy) {
+        DBG_WARN("[Shot] RAM capture skipped: busy");
+        return false;
+    }
+    screenshotBusy = true;
+
+    // Release any previous buffer before allocating the new one
+    clearScreenshotRam();
+
+    constexpr uint16_t w = SCREEN_WIDTH;
+    constexpr uint16_t h = SCREEN_HEIGHT;
+    constexpr uint32_t rowBytes = w * 3UL;
+    constexpr uint32_t rowPad = (4 - (rowBytes % 4)) % 4;
+    constexpr uint32_t pixelDataSize = (rowBytes + rowPad) * h;
+    constexpr uint32_t totalSize = 54 + pixelDataSize;
+
+    screenshotRamBuf = (uint8_t*)malloc(totalSize);
+    if (!screenshotRamBuf) {
+        snprintf(screenshotLastError, sizeof(screenshotLastError),
+                 "malloc failed (%lu B)", totalSize);
+        DBG_ERROR("[Shot] RAM capture: %s", screenshotLastError);
+        screenshotBusy = false;
+        return false;
+    }
+    screenshotRamBufSize = totalSize;
+
+    // Write BMP file header + DIB header (54 bytes total)
+    uint8_t* p = screenshotRamBuf;
+    *p++ = 'B'; *p++ = 'M';
+    writeBufLE32(p, totalSize);
+    writeBufLE16(p, 0); writeBufLE16(p, 0);  // reserved
+    writeBufLE32(p, 54);                       // pixel data offset
+    writeBufLE32(p, 40);                       // DIB header size
+    writeBufLE32(p, w);
+    writeBufLE32(p, h);                        // positive = bottom-up
+    writeBufLE16(p, 1);                        // planes
+    writeBufLE16(p, 24);                       // 24-bit RGB
+    writeBufLE32(p, 0);                        // BI_RGB (no compression)
+    writeBufLE32(p, pixelDataSize);
+    writeBufLE32(p, 2835); writeBufLE32(p, 2835);  // 72 DPI
+    writeBufLE32(p, 0); writeBufLE32(p, 0);
+
+    // Chunk buffer for TFT readRect
+    uint16_t* chunk565 = (uint16_t*)malloc((size_t)w * SCREENSHOT_CHUNK_ROWS * sizeof(uint16_t));
+    if (!chunk565) {
+        snprintf(screenshotLastError, sizeof(screenshotLastError), "chunk alloc failed");
+        DBG_ERROR("[Shot] RAM capture: %s", screenshotLastError);
+        clearScreenshotRam();
+        screenshotBusy = false;
+        return false;
+    }
+
+    const uint8_t pad[3] = {0, 0, 0};
+
+    // BMP rows are bottom-up: capture from screen bottom, write sequentially
+    for (int yTop = h - 1; yTop >= 0; yTop -= SCREENSHOT_CHUNK_ROWS) {
+        uint16_t rows = (yTop + 1 >= SCREENSHOT_CHUNK_ROWS) ? SCREENSHOT_CHUNK_ROWS : (uint16_t)(yTop + 1);
+        int firstY = yTop - rows + 1;
+
+        tft.readRect(0, firstY, w, rows, chunk565);
+
+        // Write strip bottom->top to preserve BMP bottom-up order
+        for (int ry = rows - 1; ry >= 0; ry--) {
+            const uint16_t* srcRow = &chunk565[(size_t)ry * w];
+            for (uint16_t x = 0; x < w; x++) {
+                uint16_t px = srcRow[x];
+                // TFT_eSPI readback is byte-swapped RGB565 on ESP32.
+                px = (uint16_t)((px << 8) | (px >> 8));
+                *p++ = (uint8_t)((px & 0x1F) * 255 / 31);          // B
+                *p++ = (uint8_t)(((px >> 5) & 0x3F) * 255 / 63);   // G
+                *p++ = (uint8_t)(((px >> 11) & 0x1F) * 255 / 31);  // R
+            }
+            if (rowPad) memcpy(p, pad, rowPad), p += rowPad;
+        }
+        yield();
+    }
+
+    free(chunk565);
+    screenshotRamReady = true;
+    screenshotLastError[0] = '\0';
+    DBG_INFO("[Shot] RAM capture complete (%lu bytes)", totalSize);
+    screenshotBusy = false;
+    return true;
+}
+
 // Queue a screenshot to be captured in the main loop.
 bool requestScreenshot(const char* reason = "manual") {
     if (!screenshotSdReady) {
@@ -201,6 +346,9 @@ bool captureScreenshotNow(const char* reason = "manual") {
     constexpr uint32_t fileSize = 54 + pixelDataSize;
 
     if (!ensureScreenshotDir()) {
+        // SD operation failed — card may have been removed; disable SD path so
+        // the next request automatically falls back to RAM capture.
+        screenshotSdReady = false;
         screenshotBusy = false;
         return false;
     }
@@ -212,6 +360,7 @@ bool captureScreenshotNow(const char* reason = "manual") {
     if (!f) {
         snprintf(screenshotLastError, sizeof(screenshotLastError), "open failed: %s", path);
         DBG_ERROR("[Shot] Cannot open %s for write", path);
+        screenshotSdReady = false;  // Mark SD not ready; next request uses RAM path
         screenshotBusy = false;
         return false;
     }
@@ -313,9 +462,14 @@ void pollScreenshotButton() {
     screenshotPrevButtonPressed = pressed;
 }
 
-// Run this from loop(); executes queued screenshot jobs.
+// Run this from loop(); executes queued screenshot jobs (SD or RAM).
 void handleScreenshotRequests() {
-    if (screenshotBusy || screenshotPendingCount == 0) return;
-    screenshotPendingCount--;
-    captureScreenshotNow(screenshotPendingReason);
+    if (screenshotBusy) return;
+    if (screenshotPendingCount > 0) {
+        screenshotPendingCount--;
+        captureScreenshotNow(screenshotPendingReason);
+    } else if (screenshotRamPending > 0) {
+        screenshotRamPending--;
+        captureScreenshotToRam();
+    }
 }

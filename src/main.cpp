@@ -102,6 +102,26 @@ void checkResultsPolling() {
     }
 }
 
+// --- Post-Race Expiry ---
+// When the post-race window ends, immediately refresh the schedule so races[1] advances
+// to the next upcoming race and the race-week countdown activates without waiting 24h.
+void checkPostRaceExpiry() {
+    static bool wasInPostRace = false;
+    RaceData& race = getCurrentRace();
+    long secsAfterGP = (long)(nowUTC() - race.gpTimeUtc);
+    int daysAfterGP = (int)(secsAfterGP / 86400);
+    bool inPostRace = (secsAfterGP >= 0 && daysAfterGP < POST_RACE_DAYS);
+
+    if (wasInPostRace && !inPostRace) {
+        DBG_INFO("[Main] Post-race window ended — refreshing schedule for next race");
+        if (fetchSchedule()) {
+            requestRedraw();
+            lastScheduleFetch = millis();
+        }
+    }
+    wasInPostRace = inPostRace;
+}
+
 // --- Schedule Refresh ---
 void checkScheduleRefresh() {
     if (millis() - lastScheduleFetch >= SCHEDULE_REFRESH_MS) {
@@ -189,6 +209,28 @@ void setup() {
     }
     lastScheduleFetch = millis();
 
+#if FORCE_POST_RACE_TEST_DISPLAYS
+    DBG_INFO("[Main] Test mode enabled: forcing post-race displays and prefetching post-race data");
+    fetchPostRaceData(getCurrentRace().round);
+#else
+    // If we're already in the post-race window on boot, fetch immediately rather than
+    // waiting RESULTS_RETRY_MS (30 min) for the first poll to trigger
+    {
+        RaceData& cr = getCurrentRace();
+        long secsAfterGP = (long)(nowUTC() - cr.gpTimeUtc);
+        if (secsAfterGP >= RESULTS_POLL_AFTER_SEC && secsAfterGP < RESULTS_GIVE_UP_SEC) {
+            DBG_INFO("[Main] Post-race window detected at boot — fetching results now (R%d)", cr.round);
+            drawStatusMessage("Loading race results...", 6);
+            if (fetchPostRaceData(cr.round)) {
+                DBG_INFO("[Main] Post-race data ready");
+            } else {
+                DBG_WARN("[Main] Post-race fetch failed — will retry in loop");
+            }
+            lastResultsPoll = millis();  // Suppress duplicate poll for 30 min
+        }
+    }
+#endif
+
     // 10. Init Telegram
     DBG_INFO("[Main] 10/12 Telegram: %s", appConfig.telegramEnabled ? "enabled" : "disabled");
     if (appConfig.telegramEnabled) {
@@ -245,6 +287,9 @@ void loop() {
 
     // Post-race results polling
     checkResultsPolling();
+
+    // Post-race expiry — triggers immediate schedule refresh when window ends
+    checkPostRaceExpiry();
 
     // Schedule refresh - every 24 hours
     checkScheduleRefresh();
