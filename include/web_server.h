@@ -29,13 +29,13 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <title>F1 Display Config</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,sans-serif;background:#1a1a2e;color:#eee;padding:20px;max-width:600px;margin:0 auto}
+body{font-family:-apple-system,sans-serif;background:#000;color:#eee;padding:20px;max-width:600px;margin:0 auto}
 #logoWrap{text-align:center;margin-bottom:10px}
 canvas{width:236px;height:128px;border-radius:8px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,0.4)}
 h2{color:#e10600;margin:20px 0 10px;font-size:1.1em;border-bottom:1px solid #333;padding-bottom:5px}
 .status{text-align:center;color:#888;margin-bottom:14px;font-size:0.85em}
 label{display:block;margin:10px 0 4px;color:#ccc;font-size:0.9em}
-input,select{width:100%;padding:10px;border:1px solid #333;border-radius:6px;background:#16213e;color:#eee;font-size:0.95em}
+input,select{width:100%;padding:10px;border:1px solid #333;border-radius:6px;background:#111;color:#eee;font-size:0.95em}
 input:focus{border-color:#e10600;outline:none}
 .range-wrap{display:flex;align-items:center;gap:10px}
 .range-wrap input[type=range]{flex:1}
@@ -46,7 +46,7 @@ button:hover{background:#ff1801}
 .msg{text-align:center;padding:10px;margin-top:10px;border-radius:6px;display:none}
 .msg.ok{display:block;background:#0a3d0a;color:#4caf50}
 .msg.err{display:block;background:#3d0a0a;color:#f44}
-.info{background:#16213e;padding:12px;border-radius:6px;margin-top:15px;font-size:0.85em;color:#888}
+.info{background:#111;padding:12px;border-radius:6px;margin-top:15px;font-size:0.85em;color:#888}
 .info span{color:#eee}
 .dbg-row{display:flex;align-items:center;gap:8px;margin-top:8px}
 .dbg-row select{width:auto;flex:1;padding:8px}
@@ -56,12 +56,14 @@ a{color:#e10600}
 .about-links a{color:#4caf50;text-decoration:none;font-weight:bold;font-size:1.05em}
 .about-links a:hover{text-decoration:underline}
 .about-built{color:#aaa;margin-bottom:4px}
-.about-credit{color:#555}
-.about-credit a{color:#555}
+.about-credit{color:#888}
+.about-credit a{color:#888}
+.about-data{color:#777;margin-top:6px}
+.about-data a{color:#777}
 .tabs{display:flex;gap:6px;margin-bottom:16px}
-.tab-btn{flex:1;padding:10px;border:1px solid #333;border-radius:6px;background:#16213e;color:#888;font-size:0.95em;cursor:pointer;font-weight:bold}
+.tab-btn{flex:1;padding:10px;border:1px solid #333;border-radius:6px;background:#111;color:#888;font-size:0.95em;cursor:pointer;font-weight:bold}
 .tab-btn.active{background:#e10600;color:#fff;border-color:#e10600}
-.sch-hdr{background:#16213e;padding:12px;border-radius:6px;margin-bottom:12px}
+.sch-hdr{background:#111;padding:12px;border-radius:6px;margin-bottom:12px}
 .sch-hdr .rname{color:#eee;font-weight:bold;font-size:1em}
 .sch-hdr .rloc{color:#888;font-size:0.85em;margin-top:3px}
 .sprint-badge{display:inline-block;background:#ffd700;color:#000;font-size:0.7em;padding:2px 6px;border-radius:4px;margin-left:8px;font-weight:bold;vertical-align:middle}
@@ -146,6 +148,7 @@ Uptime: <span id="uptime">-</span>
 </div>
 <div class="about-built">Built with &#10084; by Anthony Clarke</div>
 <div class="about-credit">Based on original idea by <a href="https://github.com/witnessmenow/F1-Arduino-Notifications" target="_blank">@witnessmenow</a></div>
+<div class="about-data">Data: <a href="https://github.com/sportstimes/f1" target="_blank">sportstimes/f1</a> &amp; <a href="https://github.com/jolpica/jolpica-f1" target="_blank">Jolpica F1 API</a></div>
 </div>
 </div>
 

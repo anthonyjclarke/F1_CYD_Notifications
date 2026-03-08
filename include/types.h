@@ -22,7 +22,8 @@ enum DisplayState : uint8_t {
     STATE_RACE_WEEK_TRACK,          // Track layout image
     STATE_POST_RACE_WINNER,         // Race winner / podium
     STATE_POST_RACE_DRIVERS,        // Driver standings
-    STATE_POST_RACE_CONSTRUCTORS    // Constructor standings
+    STATE_POST_RACE_CONSTRUCTORS,   // Constructor standings
+    STATE_POST_RACE_NEXT_RACE       // Countdown to next race
 };
 
 // --- Notification Bitmask ---

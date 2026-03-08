@@ -14,8 +14,36 @@ Version scheme: `MAJOR.MINOR.PATCH`
   - Create a "Production" Flag that will not compile the diagnostics tools like Screenshot Capture
   - Stop Display Flicker on "RACE_WEEK_XXXXX"
   - How to maximise memory available for code
+  - Add my contact details and Github Repo to the Config page
 
 ## [Unreleased]
+
+---
+
+## [0.5.0] - 2026-03-09
+
+### Added
+- Combined race-week + post-race screen rotation: when previous race results are available during race week, display cycles through 6 screens (COUNTDOWN → SCHEDULE → TRACK → WINNER → DRIVERS → CONSTRUCTORS → loop) instead of the standard 3 race-week screens only
+- `getPrevRace()` in `f1_data.h` returns `races[0]` for use in combined mode; winner screen correctly attributes results to the previous race, not the upcoming one
+- `checkPostRaceExpiry()` in `main.cpp`: detects when the post-race window closes and immediately triggers a schedule refresh — eliminates up to 24h IDLE gap before race-week countdown activates
+- Boot-time post-race results fetch: if the device boots inside the post-race window, results are fetched immediately at startup rather than waiting up to 30 minutes for the first poll cycle
+- `STATE_POST_RACE_NEXT_RACE` included in pure post-race rotation: after constructor standings, shows countdown to next race before cycling back to winner screen
+- Top 5 race result display on RACE RESULT screen (was top 3 / podium only)
+- Top 8 driver and constructor standings display (was top 5)
+- Full driver name shown in DRIVER STANDINGS when it fits the column width; falls back to surname only when truncation would occur (using `tft.textWidth()`)
+
+### Changed
+- `POST_RACE_DAYS` reduced from 7 to 3: tighter post-race window, leaving more days for the dedicated race-week countdown rotation before the next event
+- `STANDINGS_TOP_N` increased from 5 to 8 — controls both the Jolpica API `?limit=` parameter and the renderer loop count
+- `MAX_PODIUM` increased from 3 to 5 — controls both the Jolpica API `?limit=` and the race result screen
+- `RESULTS_GIVE_UP_SEC` changed from hardcoded `24h` to `POST_RACE_DAYS × 86400` so the polling window tracks the configured post-race duration
+- `renderCurrentState()` now accepts a `phase` parameter to distinguish combined race-week context from pure post-race, used to select the correct race data for the winner screen
+- RACE RESULT screen uses uniform `FreeSans9pt7b` throughout (was mixed 12pt/9pt); constructor team shown in `COLOR_SESSION_TEXT` below driver name; positions 1–3 highlighted in `COLOR_HIGHLIGHT` (yellow), 4–5 in `COLOR_TEXT` (white)
+
+### Fixed
+- **Jolpica API HTTPS redirect** (critical): all three Jolpica endpoints (`results`, `driverStandings`, `constructorStandings`) were using `http://api.jolpi.ca` which returns HTTP 301; the ESP32 `HTTPClient` did not follow the redirect, causing all post-race screens to display "Status Pending" with no data. Fixed by switching to `WiFiClientSecure` with `client.setInsecure()` and `https://` base URL in `config.h` and all fetch functions in `f1_data.h`
+- Post-race polling silently stopping before data arrived: `RESULTS_GIVE_UP_SEC` was fixed at 24h, so any device booting more than 24h after the GP would never poll for results even though the post-race window was still open
+- Post-race → race-week transition gap: when the post-race window expired, the device remained in IDLE for up to 24h (until the next scheduled `fetchSchedule()` ran). `checkPostRaceExpiry()` now triggers an immediate refresh the moment the window closes
 
 ---
 

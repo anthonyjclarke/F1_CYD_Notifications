@@ -23,6 +23,7 @@ static const char* stateName(DisplayState s) {
         case STATE_POST_RACE_WINNER:       return "POST_RACE_WINNER";
         case STATE_POST_RACE_DRIVERS:      return "POST_RACE_DRIVERS";
         case STATE_POST_RACE_CONSTRUCTORS: return "POST_RACE_CONSTRUCTORS";
+        case STATE_POST_RACE_NEXT_RACE:    return "POST_RACE_NEXT_RACE";
         default:                           return "UNKNOWN";
     }
 }
@@ -126,23 +127,38 @@ void advanceDisplayState(DisplayState phase) {
         case STATE_RACE_WEEK_COUNTDOWN:
         case STATE_RACE_WEEK_SCHEDULE:
         case STATE_RACE_WEEK_TRACK:
-            // Rotate between countdown, schedule, track
-            switch (currentDisplayState) {
-                case STATE_RACE_WEEK_COUNTDOWN: currentDisplayState = STATE_RACE_WEEK_SCHEDULE; break;
-                case STATE_RACE_WEEK_SCHEDULE:  currentDisplayState = STATE_RACE_WEEK_TRACK; break;
-                case STATE_RACE_WEEK_TRACK:     currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
-                default:                        currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
+            if (resultsAvailable) {
+                // Combined rotation: countdown → schedule → track → winner → drivers → constructors → countdown
+                switch (currentDisplayState) {
+                    case STATE_RACE_WEEK_COUNTDOWN:    currentDisplayState = STATE_RACE_WEEK_SCHEDULE; break;
+                    case STATE_RACE_WEEK_SCHEDULE:     currentDisplayState = STATE_RACE_WEEK_TRACK; break;
+                    case STATE_RACE_WEEK_TRACK:        currentDisplayState = STATE_POST_RACE_WINNER; break;
+                    case STATE_POST_RACE_WINNER:       currentDisplayState = STATE_POST_RACE_DRIVERS; break;
+                    case STATE_POST_RACE_DRIVERS:      currentDisplayState = STATE_POST_RACE_CONSTRUCTORS; break;
+                    case STATE_POST_RACE_CONSTRUCTORS: currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
+                    default:                           currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
+                }
+            } else {
+                // Standard rotation: countdown → schedule → track → countdown
+                switch (currentDisplayState) {
+                    case STATE_RACE_WEEK_COUNTDOWN: currentDisplayState = STATE_RACE_WEEK_SCHEDULE; break;
+                    case STATE_RACE_WEEK_SCHEDULE:  currentDisplayState = STATE_RACE_WEEK_TRACK; break;
+                    case STATE_RACE_WEEK_TRACK:     currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
+                    default:                        currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
+                }
             }
             break;
 
         case STATE_POST_RACE_WINNER:
         case STATE_POST_RACE_DRIVERS:
         case STATE_POST_RACE_CONSTRUCTORS:
-            // Rotate between winner, drivers, constructors
+        case STATE_POST_RACE_NEXT_RACE:
+            // Rotate: winner → drivers → constructors → next race → winner
             switch (currentDisplayState) {
                 case STATE_POST_RACE_WINNER:       currentDisplayState = STATE_POST_RACE_DRIVERS; break;
                 case STATE_POST_RACE_DRIVERS:      currentDisplayState = STATE_POST_RACE_CONSTRUCTORS; break;
-                case STATE_POST_RACE_CONSTRUCTORS: currentDisplayState = STATE_POST_RACE_WINNER; break;
+                case STATE_POST_RACE_CONSTRUCTORS: currentDisplayState = STATE_POST_RACE_NEXT_RACE; break;
+                case STATE_POST_RACE_NEXT_RACE:    currentDisplayState = STATE_POST_RACE_WINNER; break;
                 default:                           currentDisplayState = STATE_POST_RACE_WINNER; break;
             }
             break;
@@ -156,8 +172,9 @@ void advanceDisplayState(DisplayState phase) {
     displayNeedsRedraw = true;
 }
 
-// Render the current display state
-void renderCurrentState(RaceData& race) {
+// Render the current display state.
+// phase is passed in to distinguish combined race-week+results mode from pure post-race.
+void renderCurrentState(RaceData& race, DisplayState phase) {
     if (!displayNeedsRedraw) return;
     bool partial = displayPartialUpdate;
     displayNeedsRedraw = false;
@@ -188,7 +205,8 @@ void renderCurrentState(RaceData& race) {
             break;
         }
         case STATE_POST_RACE_WINNER:
-            drawRaceWinner(race);
+            // In combined race-week mode races[1] is the new race; use races[0] for previous race title
+            drawRaceWinner(phase == STATE_RACE_WEEK_COUNTDOWN ? getPrevRace() : race);
             break;
 
         case STATE_POST_RACE_DRIVERS:
@@ -198,6 +216,14 @@ void renderCurrentState(RaceData& race) {
         case STATE_POST_RACE_CONSTRUCTORS:
             drawConstructorStandings();
             break;
+
+        case STATE_POST_RACE_NEXT_RACE: {
+            RaceData& nextRace = getNextRace();
+            CountdownTarget target = getCountdownTarget(nextRace);
+            Countdown cd = getCountdownWithSession(target.utcTime, target.sessionType);
+            drawCountdown(nextRace, cd, partial);
+            break;
+        }
     }
 }
 
@@ -215,12 +241,18 @@ void updateDisplay(RaceData& race) {
     } else if (phase == STATE_RACE_WEEK_COUNTDOWN &&
                currentDisplayState != STATE_RACE_WEEK_COUNTDOWN &&
                currentDisplayState != STATE_RACE_WEEK_SCHEDULE &&
-               currentDisplayState != STATE_RACE_WEEK_TRACK) {
+               currentDisplayState != STATE_RACE_WEEK_TRACK &&
+               // Don't reset if showing previous race results in combined mode
+               !(resultsAvailable && (
+                   currentDisplayState == STATE_POST_RACE_WINNER ||
+                   currentDisplayState == STATE_POST_RACE_DRIVERS ||
+                   currentDisplayState == STATE_POST_RACE_CONSTRUCTORS))) {
         phaseChanged = true;
     } else if (phase == STATE_POST_RACE_WINNER &&
                currentDisplayState != STATE_POST_RACE_WINNER &&
                currentDisplayState != STATE_POST_RACE_DRIVERS &&
-               currentDisplayState != STATE_POST_RACE_CONSTRUCTORS) {
+               currentDisplayState != STATE_POST_RACE_CONSTRUCTORS &&
+               currentDisplayState != STATE_POST_RACE_NEXT_RACE) {
         phaseChanged = true;
     }
 
@@ -233,7 +265,8 @@ void updateDisplay(RaceData& race) {
 
     // Countdown state: update digits every second without full-screen flicker
     if (currentDisplayState == STATE_IDLE ||
-        currentDisplayState == STATE_RACE_WEEK_COUNTDOWN) {
+        currentDisplayState == STATE_RACE_WEEK_COUNTDOWN ||
+        currentDisplayState == STATE_POST_RACE_NEXT_RACE) {
         static unsigned long lastCountdownUpdate = 0;
         if (millis() - lastCountdownUpdate >= COUNTDOWN_UPDATE_MS) {
             lastCountdownUpdate = millis();
@@ -251,7 +284,7 @@ void updateDisplay(RaceData& race) {
         advanceDisplayState(phase);
     }
 
-    renderCurrentState(race);
+    renderCurrentState(race, phase);
 }
 
 // Manual advance (touch input)

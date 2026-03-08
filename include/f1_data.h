@@ -9,6 +9,10 @@
 #include "time_utils.h"
 #include "config_manager.h"
 
+// Race schedule fetched from sportstimes/f1 GitHub JSON feed (https://github.com/sportstimes/f1).
+// Post-race results, driver standings, and constructor standings fetched from
+// Jolpica F1 API (https://github.com/jolpica/jolpica-f1) — Ergast-compatible endpoint.
+
 // --- Global race data ---
 static RaceData races[MAX_RACES];       // prev, current, next
 static uint8_t currentRaceIdx = 1;      // Index into races[] for current/next race
@@ -250,10 +254,12 @@ bool loadScheduleFromCache() {
 // Fetch race results from Jolpica API
 bool fetchRaceResults(uint8_t round) {
     DBG_INFO("[F1] Fetching results for R%d", round);
+    WiFiClientSecure client;
+    client.setInsecure();
     HTTPClient http;
     char url[128];
-    snprintf(url, sizeof(url), "%s/%d/results.json?limit=3", JOLPICA_BASE_URL, round);
-    http.begin(url);
+    snprintf(url, sizeof(url), "%s/%d/results.json?limit=%d", JOLPICA_BASE_URL, round, MAX_PODIUM);
+    http.begin(client, url);
     http.setTimeout(10000);
     int code = http.GET();
 
@@ -302,10 +308,12 @@ bool fetchRaceResults(uint8_t round) {
 // Fetch driver standings from Jolpica API
 bool fetchDriverStandings() {
     DBG_INFO("[F1] Fetching driver standings");
+    WiFiClientSecure client;
+    client.setInsecure();
     HTTPClient http;
     char url[128];
     snprintf(url, sizeof(url), "%s/driverstandings.json?limit=%d", JOLPICA_BASE_URL, STANDINGS_TOP_N);
-    http.begin(url);
+    http.begin(client, url);
     http.setTimeout(10000);
     int code = http.GET();
 
@@ -355,10 +363,12 @@ bool fetchDriverStandings() {
 // Fetch constructor standings from Jolpica API
 bool fetchConstructorStandings() {
     DBG_INFO("[F1] Fetching constructor standings");
+    WiFiClientSecure client;
+    client.setInsecure();
     HTTPClient http;
     char url[128];
     snprintf(url, sizeof(url), "%s/constructorstandings.json?limit=%d", JOLPICA_BASE_URL, STANDINGS_TOP_N);
-    http.begin(url);
+    http.begin(client, url);
     http.setTimeout(10000);
     int code = http.GET();
 
@@ -422,6 +432,11 @@ bool fetchPostRaceData(uint8_t round) {
 // Get the current race data
 RaceData& getCurrentRace() {
     return races[currentRaceIdx];
+}
+
+// Get the previous race data (used for results display during combined race-week mode)
+RaceData& getPrevRace() {
+    return races[0];
 }
 
 // Get the next race data

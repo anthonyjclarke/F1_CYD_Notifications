@@ -6,7 +6,7 @@
 // =============================================================
 
 // --- App Version ---
-#define APP_VERSION         "0.4.0"
+#define APP_VERSION         "0.5.0"
 
 // --- CYD Pin Mapping (v1/v2) ---
 // TFT display pins defined in platformio.ini build_flags
@@ -44,14 +44,16 @@
 #define RESULTS_CACHE_FILE  "/results.json"
 
 // --- F1 Data URLs ---
+// Schedule source: https://github.com/sportstimes/f1
 #define SCHEDULE_URL        "https://raw.githubusercontent.com/sportstimes/f1/main/_db/f1/2026.json"
-#define JOLPICA_BASE_URL    "http://api.jolpi.ca/ergast/f1/2026"
+// Results/standings source: Jolpica F1 API — https://github.com/jolpica/jolpica-f1
+#define JOLPICA_BASE_URL    "https://api.jolpi.ca/ergast/f1/2026"
 
 // --- Timing Constants ---
 #define SCHEDULE_REFRESH_MS     (24UL * 60 * 60 * 1000)  // 24 hours
 #define RESULTS_RETRY_MS        (30UL * 60 * 1000)       // 30 minutes
 #define RESULTS_POLL_AFTER_SEC  (3 * 60 * 60)            // 3 hours after GP
-#define RESULTS_GIVE_UP_SEC     (24 * 60 * 60)           // Stop retrying after 24h
+#define RESULTS_GIVE_UP_SEC     (POST_RACE_DAYS * 24 * 60 * 60)  // Stop retrying after post-race window
 #define DISPLAY_ROTATE_MS       8000                     // Screen rotation
 #define POST_RACE_ROTATE_MS     10000                    // Post-race rotation
 #define COUNTDOWN_UPDATE_MS     1000                     // 1 second
@@ -60,7 +62,7 @@
 
 // --- Race Week ---
 #define COUNTDOWN_WEEK_DAYS     7           // Days before race to start countdown
-#define POST_RACE_DAYS          7           // Days to show post-race data
+#define POST_RACE_DAYS          3           // Days to show post-race data
 #define NOTIFY_HOURS_BEFORE     1           // Hours before session to notify
 #define FORCE_POST_RACE_TEST_DISPLAYS 0     // 1 = force post-race screen rotation for UI testing
 
@@ -83,8 +85,8 @@
 #define MAX_RACES            3     // Store prev/current/next
 #define MAX_SESSIONS         7     // Max sessions per race
 #define MAX_STANDINGS        10    // Top 10 standings
-#define STANDINGS_TOP_N      5     // Show/fetch Top 5 standings
-#define MAX_PODIUM           3     // Podium positions
+#define STANDINGS_TOP_N      8     // Show/fetch Top 8 standings (8 rows fit at 19px rowH, last row at y=193)
+#define MAX_PODIUM           5     // Podium positions (top 5 shown on race result screen)
 
 // --- Web Server ---
 #define WEB_SERVER_PORT      80

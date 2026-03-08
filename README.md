@@ -1,5 +1,10 @@
 # F1 CYD Notifications
 
+<!-- Note: Update version badge below when FIRMWARE_VERSION changes in include/config.h -->
+![Version](https://img.shields.io/badge/version-0.5.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-ESP32-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-yellow.svg)
+
 F1 race-week display and notification firmware for the **ESP32-2432S028R (Cheap Yellow Display)**.
 
 I have to start by recognising the great work by @witnessmenow with https://github.com/witnessmenow/F1-Arduino-Notifications.  I started this project out with a Fork to "modernise" and add some features that I wanted but hit a wall so started afresh with a project brief and ask my good friend Claude.ai to get started.  This is what we now have, still more to do, but I'm happy with the little CYD on my desk keeping me updated!
@@ -104,13 +109,17 @@ Captured from the device TFT output.
 ## Display State Flow
 
 ```text
-IDLE (countdown)
+IDLE (countdown to next race)
   └─ when first session is within 7 days
-      └─ RACE_WEEK_COUNTDOWN -> RACE_WEEK_SCHEDULE -> RACE_WEEK_TRACK (8s rotation)
-          └─ after GP start time
-              └─ POST_RACE_WINNER -> POST_RACE_DRIVERS -> POST_RACE_CONSTRUCTORS (10s rotation)
-                  └─ exits after 7-day post-race window
-                      └─ back to IDLE
+      └─ RACE WEEK (8s rotation):
+             RACE_WEEK_COUNTDOWN -> RACE_WEEK_SCHEDULE -> RACE_WEEK_TRACK -> (loop)
+          └─ if previous race results available: combined 6-screen rotation:
+             RACE_WEEK_COUNTDOWN -> RACE_WEEK_SCHEDULE -> RACE_WEEK_TRACK
+             -> POST_RACE_WINNER -> POST_RACE_DRIVERS -> POST_RACE_CONSTRUCTORS -> (loop)
+          └─ after GP start time (pure post-race, no active race week)
+              └─ POST RACE (10s rotation):
+                     POST_RACE_WINNER -> POST_RACE_DRIVERS -> POST_RACE_CONSTRUCTORS -> POST_RACE_NEXT_RACE -> (loop)
+                  └─ exits after 3-day post-race window -> back to IDLE
 ```
 
 Touch input manually advances to the next state in the active phase.
@@ -145,8 +154,8 @@ Touch input manually advances to the next state in the active phase.
 
 ### Data sources
 
-- Schedule: `https://raw.githubusercontent.com/sportstimes/f1/main/_db/f1/2026.json`
-- Results/standings: `http://api.jolpi.ca/ergast/f1/2026`
+- Schedule: [sportstimes/f1](https://github.com/sportstimes/f1) — `https://raw.githubusercontent.com/sportstimes/f1/main/_db/f1/2026.json`
+- Results/standings: [Jolpica F1 API](https://github.com/jolpica/jolpica-f1) — `https://api.jolpi.ca/ergast/f1/2026`
 
 ## Telegram Notifications
 
@@ -281,8 +290,14 @@ Change at runtime from web UI or `/api/debug`.
 - `include/config_manager.h` LittleFS config/cache I/O
 - `include/time_utils.h` NTP/timezone/countdown helpers
 
+## Acknowledgements
+
+- [witnessmenow/F1-Arduino-Notifications](https://github.com/witnessmenow/F1-Arduino-Notifications) — original idea and starting point
+- [sportstimes/f1](https://github.com/sportstimes/f1) — F1 season schedule JSON feed
+- [Jolpica F1 API](https://github.com/jolpica/jolpica-f1) — post-race results, driver standings, and constructor standings
+
 ## Related Docs
 
-- Functional/operational detail: [FUNCTIONAL_OPERATIONAL_SPEC.md](./FUNCTIONAL_OPERATIONAL_SPEC.md)
+- Functional/operational detail: [FUNCTIONAL_SPEC.md](./FUNCTIONAL_SPEC.md)
 - Change history: [CHANGELOG.md](./CHANGELOG.md)
 - Project notes: [CLAUDE.md](./CLAUDE.md)

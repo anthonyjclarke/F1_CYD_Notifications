@@ -322,12 +322,12 @@ void drawRaceWinner(RaceData& race) {
     tft.setTextColor(COLOR_HEADER_TEXT);
     tft.setTextDatum(MC_DATUM);
     tft.setFreeFont(&FreeSansBold9pt7b);
-    tft.drawString("RACE RESULT", SCREEN_WIDTH / 2, 14);
+    tft.drawString("RACE RESULT", SCREEN_WIDTH / 2, 12);
 
     // Race name
     tft.setFreeFont(&FreeSans9pt7b);
     tft.setTextColor(COLOR_SESSION_TEXT);
-    tft.drawString(race.name, SCREEN_WIDTH / 2, 40);
+    tft.drawString(race.name, SCREEN_WIDTH / 2,38);
 
     if (podiumCount == 0) {
         tft.setTextColor(COLOR_GRID);
@@ -335,27 +335,27 @@ void drawRaceWinner(RaceData& race) {
         return;
     }
 
-    // Podium positions
-    uint16_t colors[] = {COLOR_PODIUM_GOLD, COLOR_PODIUM_SILVER, COLOR_PODIUM_BRONZE};
-    const char* posLabels[] = {"1st", "2nd", "3rd"};
-    int yPos[] = {75, 135, 175};
+    // Top 5 results — 9pt throughout, 36px per entry (driver line + constructor line + gap)
+    // yPos: 58, 94, 130, 166, 202 → last constructor at 202+16=218, within 240px
+    const char* posLabels[] = {"1st", "2nd", "3rd", "4th", "5th"};
 
     for (uint8_t i = 0; i < podiumCount; i++) {
-        // Position badge
+        int y = 58 + i * 36;
         tft.setTextDatum(ML_DATUM);
-        tft.setTextColor(colors[i]);
-        tft.setFreeFont(i == 0 ? &FreeSansBold12pt7b : &FreeSansBold9pt7b);
-        tft.drawString(posLabels[i], 15, yPos[i]);
 
-        // Driver name
+        // Position label — yellow for top 3, white for 4th/5th
+        tft.setFreeFont(&FreeSansBold9pt7b);
+        tft.setTextColor(i < 3 ? COLOR_HIGHLIGHT : COLOR_TEXT);
+        tft.drawString(posLabels[i], 15, y);
+
+        // Driver name — bold white
         tft.setTextColor(COLOR_TEXT);
-        tft.setFreeFont(i == 0 ? &FreeSans12pt7b : &FreeSans9pt7b);
-        tft.drawString(podium[i].driverName, 70, yPos[i]);
+        tft.drawString(podium[i].driverName, 70, y);
 
-        // Constructor
-        tft.setTextColor(COLOR_SESSION_TEXT);
+        // Constructor — light gray
         tft.setFreeFont(&FreeSans9pt7b);
-        tft.drawString(podium[i].constructor, 70, yPos[i] + (i == 0 ? 24 : 20));
+        tft.setTextColor(COLOR_SESSION_TEXT);
+        tft.drawString(podium[i].constructor, 70, y + 16);
     }
 }
 
@@ -385,7 +385,7 @@ void drawDriverStandings() {
     tft.setTextDatum(ML_DATUM);
     tft.drawString("POS", 8, y);
     tft.drawString("DRIVER", 50, y);
-    tft.drawString("PTS", 270, y);
+    tft.drawString("PTS", 255, y);
     tft.drawFastHLine(0, y + 10, SCREEN_WIDTH, COLOR_GRID);
 
     // Rows
@@ -408,10 +408,22 @@ void drawDriverStandings() {
         char ptsBuf[12];
         snprintf(ptsBuf, sizeof(ptsBuf), "%d pts", e.points);
 
+        // Full name if it fits in the column (x=50 to x=245), else surname only
+        constexpr int nameColWidth = 195;
+        const char* displayName = e.name;
+        char surname[32];
+        if (tft.textWidth(e.name) > nameColWidth) {
+            const char* lastSpace = strrchr(e.name, ' ');
+            if (lastSpace) {
+                strlcpy(surname, lastSpace + 1, sizeof(surname));
+                displayName = surname;
+            }
+        }
+
         tft.setTextDatum(ML_DATUM);
         tft.setTextColor(color);
         tft.drawString(posBuf, 15, y);
-        tft.drawString(e.code, 50, y);
+        tft.drawString(displayName, 50, y);
         tft.setTextColor(COLOR_SESSION_TEXT);
         tft.drawString(ptsBuf, 248, y);
 
@@ -445,7 +457,7 @@ void drawConstructorStandings() {
     tft.setTextDatum(ML_DATUM);
     tft.drawString("POS", 8, y);
     tft.drawString("TEAM", 50, y);
-    tft.drawString("PTS", 270, y);
+    tft.drawString("PTS", 255, y);
     tft.drawFastHLine(0, y + 10, SCREEN_WIDTH, COLOR_GRID);
 
     // Rows
