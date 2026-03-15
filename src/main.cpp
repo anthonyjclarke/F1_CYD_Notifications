@@ -31,6 +31,8 @@ unsigned long lastScheduleFetch   = 0;
 unsigned long lastResultsPoll     = 0;
 unsigned long lastNotificationChk = 0;
 unsigned long lastBrightnessChk   = 0;
+unsigned long lastWiFiCheck       = 0;
+unsigned long lastTimeSave        = 0;
 bool resultsPollActive            = false;
 
 // --- Touch ---
@@ -71,18 +73,43 @@ void setLED(bool r, bool g, bool b) {
     digitalWrite(PIN_LED_B, !b);
 }
 
+// --- Fetch post-race data with per-step TFT status messages ---
+bool fetchPostRaceDataWithStatus(uint8_t round) {
+    drawStatusMessage("Fetching race result...");
+    bool resultsOk = fetchRaceResults(round);
+
+    drawStatusMessage("Fetching driver standings...");
+    bool driversOk = fetchDriverStandings();
+
+    drawStatusMessage("Fetching constructor standings...");
+    bool constructorsOk = fetchConstructorStandings();
+
+    bool ok = resultsOk && driversOk && constructorsOk;
+    resultsAvailable = ok;
+    DBG_INFO("[Main] Post-race fetch: podium=%s drivers=%s constructors=%s",
+             resultsOk ? "ok" : "fail",
+             driversOk ? "ok" : "fail",
+             constructorsOk ? "ok" : "fail");
+    return ok;
+}
+
 // --- Post-Race Data Polling ---
 void checkResultsPolling() {
-    RaceData& race = getCurrentRace();
     time_t now = nowUTC();
-    long secsAfterGP = now - race.gpTimeUtc;
+
+    // Use the most recently completed race: current if its GP has passed, else previous.
+    // This handles the overlap where we're in race-week for the next race but still
+    // within the results window for the race just gone.
+    RaceData& raceForResults = (now >= getCurrentRace().gpTimeUtc) ? getCurrentRace() : getPrevRace();
+    long secsAfterGP = now - raceForResults.gpTimeUtc;
 
     // Start polling after GP + 3 hours
     if (secsAfterGP >= RESULTS_POLL_AFTER_SEC &&
         secsAfterGP < RESULTS_GIVE_UP_SEC &&
         !resultsAvailable) {
         if (!resultsPollActive) {
-            DBG_INFO("[Main] Results polling activated (%.1fh after GP)", secsAfterGP / 3600.0f);
+            DBG_INFO("[Main] Results polling activated for R%d (%.1fh after GP)",
+                     raceForResults.round, secsAfterGP / 3600.0f);
         }
         resultsPollActive = true;
     } else {
@@ -92,14 +119,32 @@ void checkResultsPolling() {
     if (resultsPollActive &&
         millis() - lastResultsPoll >= RESULTS_RETRY_MS) {
         lastResultsPoll = millis();
-        DBG_INFO("[Main] Polling for race results (R%d)...", race.round);
-        if (fetchPostRaceData(race.round)) {
+        DBG_INFO("[Main] Polling for race results (R%d)...", raceForResults.round);
+        if (fetchPostRaceDataWithStatus(raceForResults.round)) {
             resultsPollActive = false;
             requestRedraw();
             // Save notification config (results bit will be set by checkNotifications)
             saveConfig(appConfig);
         }
     }
+}
+
+// --- WiFi Reconnect ---
+// Monitors WiFi connectivity. When a drop is detected, WiFi.reconnect() is called.
+// On reconnection, an NTP resync is triggered so the clock is corrected promptly
+// rather than waiting up to an hour for ezTime's automatic re-sync interval.
+void checkWiFiReconnect() {
+    static bool wifiWasConnected = true;  // Assume connected — setup() blocked until connected
+    bool connected = (WiFi.status() == WL_CONNECTED);
+
+    if (!connected && wifiWasConnected) {
+        DBG_WARN("[WiFi] Connection lost — attempting reconnect");
+        WiFi.reconnect();
+    } else if (connected && !wifiWasConnected) {
+        DBG_INFO("[WiFi] Reconnected. IP: %s", WiFi.localIP().toString().c_str());
+        resyncNTP();
+    }
+    wifiWasConnected = connected;
 }
 
 // --- Post-Race Expiry ---
@@ -182,7 +227,7 @@ void setup() {
 
     // 8. Sync NTP time
     DBG_INFO("[Main] 8/12 Syncing NTP time (TZ: %s)", appConfig.timezone);
-    drawStatusMessage("Syncing time...", 6);
+    drawStatusMessage("Syncing time...");
 #if SCREENSHOT_STARTUP_CAPTURES
     captureScreenshotNow("boot_sync_time");
 #endif
@@ -192,7 +237,7 @@ void setup() {
 
     // 9. Fetch F1 schedule
     DBG_INFO("[Main] 9/12 Fetching F1 schedule");
-    drawStatusMessage("Loading F1 schedule...", 6);
+    drawStatusMessage("Loading F1 schedule...");
 #if SCREENSHOT_STARTUP_CAPTURES
     captureScreenshotNow("boot_loading_schedule");
 #endif
@@ -200,7 +245,7 @@ void setup() {
         DBG_WARN("[Main] Schedule fetch failed, trying cache");
         if (!loadScheduleFromCache()) {
             DBG_ERROR("[Main] No schedule data available");
-            drawStatusMessage("No schedule data available", 6);
+            drawStatusMessage("No schedule data available");
 #if SCREENSHOT_STARTUP_CAPTURES
             captureScreenshotNow("boot_no_schedule_data");
 #endif
@@ -211,17 +256,20 @@ void setup() {
 
 #if FORCE_POST_RACE_TEST_DISPLAYS
     DBG_INFO("[Main] Test mode enabled: forcing post-race displays and prefetching post-race data");
-    fetchPostRaceData(getCurrentRace().round);
+    fetchPostRaceDataWithStatus(getCurrentRace().round);
 #else
-    // If we're already in the post-race window on boot, fetch immediately rather than
-    // waiting RESULTS_RETRY_MS (30 min) for the first poll to trigger
+    // If we're already in the post-race results window on boot, fetch immediately rather
+    // than waiting RESULTS_RETRY_MS (30 min) for the first poll to trigger.
+    // Use the most recently completed race — this handles the race-week overlap where
+    // the NEXT race is within COUNTDOWN_WEEK_DAYS but results for the PREVIOUS race
+    // are still due (e.g. boot on day 2 after R1 when R2 is 5 days away).
     {
-        RaceData& cr = getCurrentRace();
-        long secsAfterGP = (long)(nowUTC() - cr.gpTimeUtc);
+        time_t now = nowUTC();
+        RaceData& raceForResults = (now >= getCurrentRace().gpTimeUtc) ? getCurrentRace() : getPrevRace();
+        long secsAfterGP = (long)(now - raceForResults.gpTimeUtc);
         if (secsAfterGP >= RESULTS_POLL_AFTER_SEC && secsAfterGP < RESULTS_GIVE_UP_SEC) {
-            DBG_INFO("[Main] Post-race window detected at boot — fetching results now (R%d)", cr.round);
-            drawStatusMessage("Loading race results...", 6);
-            if (fetchPostRaceData(cr.round)) {
+            DBG_INFO("[Main] Post-race window at boot — fetching results for R%d", raceForResults.round);
+            if (fetchPostRaceDataWithStatus(raceForResults.round)) {
                 DBG_INFO("[Main] Post-race data ready");
             } else {
                 DBG_WARN("[Main] Post-race fetch failed — will retry in loop");
@@ -293,6 +341,21 @@ void loop() {
 
     // Schedule refresh - every 24 hours
     checkScheduleRefresh();
+
+    // WiFi reconnect + NTP resync — every 30 seconds
+    if (millis() - lastWiFiCheck >= WIFI_CHECK_MS) {
+        lastWiFiCheck = millis();
+        checkWiFiReconnect();
+    }
+
+    // Periodic time save — every 15 minutes, only after a real NTP sync.
+    // Guards against re-saving a stale fallback time on repeated failed boots.
+    if (millis() - lastTimeSave >= TIME_SAVE_MS) {
+        lastTimeSave = millis();
+        if (ntpHasSynced() && nowUTC() > MIN_PLAUSIBLE_EPOCH) {
+            saveLastKnownTime(nowUTC());
+        }
+    }
 
     // Brightness update - every 10 seconds
     if (millis() - lastBrightnessChk >= BRIGHTNESS_CHECK_MS) {

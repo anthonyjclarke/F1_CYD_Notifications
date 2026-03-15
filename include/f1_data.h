@@ -98,7 +98,6 @@ bool parseSchedule(const String& json) {
     rf["name"]     = true;
     rf["location"] = true;
     rf["round"]    = true;
-    rf["slug"]     = true;
     rf["sessions"] = true;
 
     JsonDocument doc;
@@ -136,6 +135,25 @@ bool parseSchedule(const String& json) {
         DBG_WARN("[F1] Season appears over, defaulting to last race");
     }
 
+    // If the found race is still within its post-race window but the NEXT race is already
+    // within the countdown window, advance nextIdx so the next race becomes current and
+    // the post-race race becomes prev. This enables the combined race-week + results
+    // rotation instead of the pure post-race rotation during the overlap period.
+    if (nextIdx + 1 < (int)racesArr.size()) {
+        JsonObjectConst nextSessions = racesArr[nextIdx + 1]["sessions"].as<JsonObjectConst>();
+        const char* nextFp1 = nextSessions["fp1"] | nextSessions["gp"] | (const char*)nullptr;
+        if (nextFp1) {
+            time_t nextFirst = parseISO8601(nextFp1);
+            int daysToNext = daysUntilLocalDate(nextFirst);
+            if (daysToNext >= 0 && daysToNext <= COUNTDOWN_WEEK_DAYS) {
+                DBG_INFO("[F1] R%d is within countdown window (%d days) — advancing current to R%d",
+                         racesArr[nextIdx + 1]["round"].as<int>(), daysToNext,
+                         racesArr[nextIdx + 1]["round"].as<int>());
+                nextIdx++;
+            }
+        }
+    }
+
     // Load prev, current, next
     int indices[MAX_RACES];
     indices[0] = (nextIdx > 0) ? nextIdx - 1 : 0;           // Previous
@@ -150,7 +168,6 @@ bool parseSchedule(const String& json) {
 
         strlcpy(rd.name,     race["name"]     | "Unknown", sizeof(rd.name));
         strlcpy(rd.location, race["location"] | "",        sizeof(rd.location));
-        strlcpy(rd.slug,     race["slug"]     | "",        sizeof(rd.slug));
         rd.round = race["round"] | 0;
 
         JsonObjectConst sessions = race["sessions"].as<JsonObjectConst>();
@@ -181,19 +198,41 @@ bool parseSchedule(const String& json) {
         totalRacesLoaded++;
     }
 
-    DBG_INFO("[F1] Loaded %d races. Current: R%d %s (%s)",
-             totalRacesLoaded, races[1].round, races[1].name,
+    // Determine if races[1] is in its post-race window (helps label the log correctly)
+    bool r1InPostRace = (races[1].gpTimeUtc > 0 &&
+                         now >= races[1].gpTimeUtc &&
+                         (now - races[1].gpTimeUtc) < (POST_RACE_DAYS * 86400L));
+
+    DBG_INFO("[F1] Loaded %d races. %s: R%d %s (%s)",
+             totalRacesLoaded,
+             r1InPostRace ? "Post-Race" : "Current",
+             races[1].round, races[1].name,
              races[1].isSprint ? "Sprint weekend" : "Standard weekend");
 
-    // Log first session timing for countdown debugging.
+    // Log first session and GP timing for races[1] (current/post-race)
     if (races[1].sessionCount > 0) {
         char firstLocal[48];
         char gpLocal[48];
         formatLocalFullDate(races[1].firstSessionUtc, firstLocal, sizeof(firstLocal));
         formatLocalFullDate(races[1].gpTimeUtc, gpLocal, sizeof(gpLocal));
-        DBG_INFO("[F1] Current race first session (UTC): %ld", (long)races[1].firstSessionUtc);
-        DBG_INFO("[F1] Current race first session (local): %s", firstLocal);
-        DBG_INFO("[F1] Current race GP (local): %s", gpLocal);
+        DBG_INFO("[F1] %s race first session (UTC): %ld",
+                 r1InPostRace ? "Post-Race" : "Current", (long)races[1].firstSessionUtc);
+        DBG_INFO("[F1] %s race first session (local): %s",
+                 r1InPostRace ? "Post-Race" : "Current", firstLocal);
+        DBG_INFO("[F1] %s race GP (local): %s",
+                 r1InPostRace ? "Post-Race" : "Current", gpLocal);
+    }
+
+    // Log next race timing (races[2]) — the upcoming event to count down to
+    if (races[2].round != races[1].round && races[2].sessionCount > 0) {
+        char nextFirst[48];
+        char nextGP[48];
+        formatLocalFullDate(races[2].firstSessionUtc, nextFirst, sizeof(nextFirst));
+        formatLocalFullDate(races[2].gpTimeUtc, nextGP, sizeof(nextGP));
+        DBG_INFO("[F1] Next Race: R%d %s (%s)", races[2].round, races[2].name,
+                 races[2].isSprint ? "Sprint weekend" : "Standard weekend");
+        DBG_INFO("[F1] Next race first session (local): %s", nextFirst);
+        DBG_INFO("[F1] Next race GP (local): %s", nextGP);
     }
 
     // Populate compact upcoming-races list (all rounds from current onward)

@@ -18,8 +18,8 @@ enum SessionType : uint8_t {
 enum DisplayState : uint8_t {
     STATE_IDLE,                     // Between race weeks - countdown to next race
     STATE_RACE_WEEK_COUNTDOWN,      // Large digit countdown to first session
+    STATE_RACE_WEEK_EVENT_DETAILS,  // Event info: round, date range, sprint flag
     STATE_RACE_WEEK_SCHEDULE,       // Session schedule table
-    STATE_RACE_WEEK_TRACK,          // Track layout image
     STATE_POST_RACE_WINNER,         // Race winner / podium
     STATE_POST_RACE_DRIVERS,        // Driver standings
     STATE_POST_RACE_CONSTRUCTORS,   // Constructor standings
@@ -47,7 +47,6 @@ struct SessionInfo {
 struct RaceData {
     char name[32];
     char location[32];
-    char slug[48];
     uint8_t round;
     bool isSprint;
     uint8_t sessionCount;

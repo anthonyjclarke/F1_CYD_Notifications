@@ -281,9 +281,9 @@ void drawCountdown(RaceData& race, Countdown& cd, bool partialUpdate = false) {
     }
 }
 
-// --- Track Layout Display ---
+// --- Event Details Display ---
 
-void drawTrackLayout(const uint8_t* xbmData, uint16_t w, uint16_t h, RaceData& race) {
+void drawEventDetails(RaceData& race) {
     tft.fillScreen(COLOR_BG);
 
     // Header
@@ -291,25 +291,76 @@ void drawTrackLayout(const uint8_t* xbmData, uint16_t w, uint16_t h, RaceData& r
     tft.setTextColor(COLOR_HEADER_TEXT);
     tft.setTextDatum(MC_DATUM);
     tft.setFreeFont(&FreeSansBold9pt7b);
-    tft.drawString("CIRCUIT LAYOUT", SCREEN_WIDTH / 2, 12);
+    tft.drawString("RACE DETAILS", SCREEN_WIDTH / 2, 12);
+
+    // Round number
+    char roundBuf[16];
+    snprintf(roundBuf, sizeof(roundBuf), "Round %d", race.round);
+    tft.setFreeFont(&FreeSans9pt7b);
+    tft.setTextColor(COLOR_SESSION_TEXT);
+    tft.drawString(roundBuf, SCREEN_WIDTH / 2, 38);
 
     // Race name
-    tft.setFreeFont(&FreeSans9pt7b);
+    tft.setFreeFont(&FreeSans12pt7b);
     tft.setTextColor(COLOR_TEXT);
-    tft.drawString(race.name, SCREEN_WIDTH / 2, 38);
-    tft.setTextColor(COLOR_SESSION_TEXT);
-    tft.drawString(race.location, SCREEN_WIDTH / 2, 55);
+    tft.drawString(race.name, SCREEN_WIDTH / 2, 60);
 
-    // Draw XBM track image centered
-    if (xbmData) {
-        int x = (SCREEN_WIDTH - w) / 2;
-        int y = 65 + (SCREEN_HEIGHT - 65 - h) / 2;
-        tft.drawXBitmap(x, y, xbmData, w, h, COLOR_TRACK);
+    // Location
+    tft.setFreeFont(&FreeSans9pt7b);
+    tft.setTextColor(COLOR_SESSION_TEXT);
+    tft.drawString(race.location, SCREEN_WIDTH / 2, 82);
+
+    tft.drawFastHLine(10, 96, SCREEN_WIDTH - 20, COLOR_GRID);
+
+    // Date range: "15 - 17 Mar 2026" or cross-month "30 Nov - 2 Dec 2026"
+    tmElements_t tmFirst, tmGP;
+    breakTime(myTZ.tzTime(race.firstSessionUtc, UTC_TIME), tmFirst);
+    breakTime(myTZ.tzTime(race.gpTimeUtc, UTC_TIME), tmGP);
+    const char* months[] = {"Jan","Feb","Mar","Apr","May","Jun",
+                            "Jul","Aug","Sep","Oct","Nov","Dec"};
+    char dateBuf[32];
+    if (tmFirst.Month == tmGP.Month) {
+        snprintf(dateBuf, sizeof(dateBuf), "%d - %d %s %d",
+                 tmFirst.Day, tmGP.Day, months[tmGP.Month - 1], tmGP.Year + 1970);
     } else {
-        tft.setTextColor(COLOR_GRID);
-        tft.setTextDatum(MC_DATUM);
-        tft.drawString("Track image not available", SCREEN_WIDTH / 2, 150);
+        snprintf(dateBuf, sizeof(dateBuf), "%d %s - %d %s %d",
+                 tmFirst.Day, months[tmFirst.Month - 1],
+                 tmGP.Day, months[tmGP.Month - 1], tmGP.Year + 1970);
     }
+    tft.setFreeFont(&FreeSans12pt7b);
+    tft.setTextColor(COLOR_HIGHLIGHT);
+    tft.drawString(dateBuf, SCREEN_WIDTH / 2, 118);
+
+    tft.drawFastHLine(10, 133, SCREEN_WIDTH - 20, COLOR_GRID);
+
+    // Sprint / Standard weekend badge
+    tft.setFreeFont(&FreeSansBold9pt7b);
+    if (race.isSprint) {
+        tft.setTextColor(COLOR_HIGHLIGHT);
+        tft.drawString("SPRINT WEEKEND", SCREEN_WIDTH / 2, 153);
+    } else {
+        tft.setTextColor(COLOR_SESSION_TEXT);
+        tft.drawString("STANDARD WEEKEND", SCREEN_WIDTH / 2, 153);
+    }
+
+    // First session day + time
+    char firstDayBuf[8], firstTimeBuf[8];
+    formatLocalDay(race.firstSessionUtc, firstDayBuf, sizeof(firstDayBuf));
+    formatLocalTime(race.firstSessionUtc, firstTimeBuf, sizeof(firstTimeBuf));
+    char firstBuf[40];
+    snprintf(firstBuf, sizeof(firstBuf), "First Session: %s %s", firstDayBuf, firstTimeBuf);
+    tft.setFreeFont(&FreeSans9pt7b);
+    tft.setTextColor(COLOR_SESSION_TEXT);
+    tft.drawString(firstBuf, SCREEN_WIDTH / 2, 177);
+
+    // Grand Prix day + time
+    char gpDayBuf[8], gpTimeBuf[8];
+    formatLocalDay(race.gpTimeUtc, gpDayBuf, sizeof(gpDayBuf));
+    formatLocalTime(race.gpTimeUtc, gpTimeBuf, sizeof(gpTimeBuf));
+    char gpBuf[32];
+    snprintf(gpBuf, sizeof(gpBuf), "Grand Prix: %s %s", gpDayBuf, gpTimeBuf);
+    tft.setTextColor(COLOR_TEXT);
+    tft.drawString(gpBuf, SCREEN_WIDTH / 2, 200);
 }
 
 // --- Post-Race: Winner Display ---
@@ -492,11 +543,17 @@ void drawConstructorStandings() {
 
 // --- Status message overlay ---
 
-void drawStatusMessage(const char* msg, int yOffset = 0) {
+// yOffset=28 → y=148, matching "Connecting to WiFi..." on the splash screen
+void drawStatusMessage(const char* msg, int yOffset = 28) {
     tft.setFreeFont(&FreeSans9pt7b);
-    tft.setTextColor(COLOR_SESSION_TEXT, COLOR_BG);
+    int y = (SCREEN_HEIGHT / 2) + yOffset;
+    // Clear using actual font height + generous margin so descenders (g, j, p, y)
+    // and any previous longer message don't bleed through.
+    int fh = tft.fontHeight();  // FreeSans9pt7b yAdvance ≈ 17
+    tft.fillRect(0, y - fh / 2 - 4, SCREEN_WIDTH, fh + 10, COLOR_BG);
+    tft.setTextColor(COLOR_SESSION_TEXT);
     tft.setTextDatum(MC_DATUM);
-    tft.drawString(msg, SCREEN_WIDTH / 2, (SCREEN_HEIGHT / 2) + yOffset);
+    tft.drawString(msg, SCREEN_WIDTH / 2, y);
 }
 
 // --- Update brightness from config or LDR ---

@@ -1,7 +1,7 @@
 # F1 CYD Notifications
 
 <!-- Note: Update version badge below when FIRMWARE_VERSION changes in include/config.h -->
-![Version](https://img.shields.io/badge/version-0.5.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.5.1-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-ESP32-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
 
@@ -17,10 +17,9 @@ The device shows upcoming F1 sessions, race-week countdown, and post-race data o
 
 ## What It Does
 
-- Connects to Wi-Fi with captive portal onboarding (WiFiManager)
-- Syncs NTP time using configurable timezone (IANA format)
- - Syncs NTP time using configurable timezone (IANA format)
- - Web UI provides curated dropdowns for Timezone and NTP server; saving a new timezone immediately recalculates all session local times and forces the TFT display to refresh so schedule times reflect the chosen zone
+- Connects to Wi-Fi with captive portal onboarding (WiFiManager); auto-reconnects if connection drops
+- Syncs NTP time using configurable timezone (IANA format); persists last-known-good epoch to LittleFS so the clock survives a failed NTP boot
+- Web UI provides curated dropdowns for Timezone and NTP server; saving a new timezone immediately recalculates all session local times and forces the TFT display to refresh so schedule times reflect the chosen zone
 - Fetches 2026 F1 schedule from Sportstimes JSON
 - Displays rotating race-week and post-race screens on TFT
 - Polls post-race results/standings from Jolpica API
@@ -41,14 +40,14 @@ Pins and display constants are defined in [include/config.h](./include/config.h)
 
 ## Software Stack
 
-- PlatformIO + Arduino framework
-- `TFT_eSPI`
-- `ArduinoJson`
-- `WiFiManager`
-- `UniversalTelegramBot`
-- `ESPAsyncWebServer` + `AsyncTCP`
-- `ElegantOTA`
-- `ezTime`
+- [PlatformIO](https://github.com/platformio/platformio-core) + Arduino framework
+- [`TFT_eSPI`](https://github.com/Bodmer/TFT_eSPI)
+- [`ArduinoJson`](https://github.com/bblanchon/ArduinoJson)
+- [`WiFiManager`](https://github.com/tzapu/WiFiManager)
+- [`UniversalTelegramBot`](https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot)
+- [`ESPAsyncWebServer`](https://github.com/mathieucarbou/ESPAsyncWebServer) + [`AsyncTCP`](https://github.com/mathieucarbou/AsyncTCP)
+- [`ElegantOTA`](https://github.com/ayushsharma82/ElegantOTA)
+- [`ezTime`](https://github.com/ropg/ezTime)
 
 Project configuration: [platformio.ini](./platformio.ini)
 
@@ -102,25 +101,48 @@ Captured from the device TFT output.
 
 ![Race Schedule](./images/F1_RACE_SCHEDULE.jpg)
 
-### Circuit Layout
-
-![Circuit Layout](./images/CIRCUIT_LAYOUT.jpg)
-
 ## Display State Flow
 
+Phase detection runs every loop tick via `determinePhase()`. Conditions are checked in priority order:
+
 ```text
-IDLE (countdown to next race)
-  └─ when first session is within 7 days
-      └─ RACE WEEK (8s rotation):
-             RACE_WEEK_COUNTDOWN -> RACE_WEEK_SCHEDULE -> RACE_WEEK_TRACK -> (loop)
-          └─ if previous race results available: combined 6-screen rotation:
-             RACE_WEEK_COUNTDOWN -> RACE_WEEK_SCHEDULE -> RACE_WEEK_TRACK
-             -> POST_RACE_WINNER -> POST_RACE_DRIVERS -> POST_RACE_CONSTRUCTORS -> (loop)
-          └─ after GP start time (pure post-race, no active race week)
-              └─ POST RACE (10s rotation):
-                     POST_RACE_WINNER -> POST_RACE_DRIVERS -> POST_RACE_CONSTRUCTORS -> POST_RACE_NEXT_RACE -> (loop)
-                  └─ exits after 3-day post-race window -> back to IDLE
+Priority 1 — POST-RACE
+  Condition: secsAfterGP >= 0 AND daysAfterGP < POST_RACE_DAYS (config.h: 3)
+  Rotation:  POST_RACE_ROTATE_MS per screen (config.h: 10 000 ms)
+  Sequence:  POST_RACE_WINNER → POST_RACE_DRIVERS → POST_RACE_CONSTRUCTORS
+               → POST_RACE_NEXT_RACE → (loop)
+  Exit:      after POST_RACE_DAYS (3) days past GP start → back to IDLE
+             (checkPostRaceExpiry() immediately re-fetches schedule on exit)
+
+Priority 2 — RACE WEEK
+  Condition: daysToFirst >= 0 AND daysToFirst <= COUNTDOWN_WEEK_DAYS (config.h: 7)
+  Rotation:  DISPLAY_ROTATE_MS per screen (config.h: 8 000 ms)
+
+  Standard (no previous-race results available):
+    RACE_WEEK_COUNTDOWN → RACE_WEEK_EVENT_DETAILS → RACE_WEEK_SCHEDULE → (loop)
+
+  Combined (previous-race results available):
+    RACE_WEEK_COUNTDOWN → RACE_WEEK_EVENT_DETAILS → RACE_WEEK_SCHEDULE
+      → POST_RACE_WINNER → POST_RACE_DRIVERS → POST_RACE_CONSTRUCTORS → (loop)
+
+Priority 3 — IDLE
+  Condition: none of the above apply (between race weeks)
+  Display:   single RACE_WEEK_COUNTDOWN screen, countdown digits refresh
+             every COUNTDOWN_UPDATE_MS (config.h: 1 000 ms)
 ```
+
+**Screen descriptions:**
+
+| State | Screen |
+|---|---|
+| `STATE_IDLE` | Countdown to next race (days / HH:MM:SS) with F1 logo |
+| `STATE_RACE_WEEK_COUNTDOWN` | Same countdown, updates every second; "On Now" car view during live sessions |
+| `STATE_RACE_WEEK_EVENT_DETAILS` | Round N · race name · location · date range · Sprint/Standard badge · first session and GP times |
+| `STATE_RACE_WEEK_SCHEDULE` | Full session table with day, local time, and session type |
+| `STATE_POST_RACE_WINNER` | Top-5 race result with driver names and constructors |
+| `STATE_POST_RACE_DRIVERS` | Driver championship standings (top `STANDINGS_TOP_N`) |
+| `STATE_POST_RACE_CONSTRUCTORS` | Constructor championship standings (top `STANDINGS_TOP_N`) |
+| `STATE_POST_RACE_NEXT_RACE` | Countdown to next race (same as IDLE view) |
 
 Touch input manually advances to the next state in the active phase.
 
@@ -148,7 +170,10 @@ Touch input manually advances to the next state in the active phase.
 - Display render/update state machine
 - Notifications check every **60s**
 - Post-race results polling every **30m** (active window only)
+- Post-race expiry check → immediate schedule refresh when window closes
 - Schedule refresh every **24h**
+- WiFi reconnect check every **30s** → NTP resync on reconnection
+- Time save to LittleFS every **15m** (only after a confirmed NTP sync)
 - Brightness update every **10s**
 - ElegantOTA loop handler
 
@@ -254,9 +279,10 @@ LittleFS files:
 
 - `/config.json` user settings + notification state
 - `/races.json` cached schedule payload
+- `/lasttime.json` last-known-good UTC epoch (NTP fallback for failed-sync boots)
 - `/results.json` reserved helper cache (not active in current flow)
 
-Config keys:
+Config keys (`/config.json`):
 
 - `tz`, `ntp`, `bot`, `chat`, `bright`, `notRound`, `notBits`, `tgOn`
 
@@ -274,7 +300,6 @@ Change at runtime from web UI or `/api/debug`.
 
 ## Known Limitations
 
-- Track image lookup is placeholder unless track assets are implemented in `include/track_images.h`
 - Season URLs are hardcoded to **2026**
 - Web UI/API and OTA are unauthenticated on local network
 - Some network clients currently use insecure TLS mode

@@ -80,6 +80,14 @@ td.cd{font-variant-numeric:tabular-nums;color:#666;font-size:0.8em;white-space:n
 #seasonTable td{padding:6px 4px;font-size:0.85em}
 .r-cur td{color:#ffd700;font-weight:bold}
 .r-done td{color:#3a3a4a}
+/* Post-race summary card */
+.post-race-card{background:#111;border:1px solid #2a2a1a;border-radius:6px;padding:10px 12px;margin-bottom:12px}
+.post-race-label{color:#888;font-size:0.7em;text-transform:uppercase;letter-spacing:0.08em}
+.pod-mini{margin-top:8px}
+.p-row{display:flex;align-items:baseline;gap:8px;padding:3px 0;font-size:0.85em}
+.p-pos{min-width:28px;font-weight:bold}
+.p-name{flex:1;color:#ddd}
+.p-team{color:#555;font-size:0.8em;text-align:right}
 </style>
 </head>
 <body>
@@ -88,12 +96,12 @@ td.cd{font-variant-numeric:tabular-nums;color:#666;font-size:0.8em;white-space:n
 <div class="status" id="status">Loading...</div>
 
 <div class="tabs">
-  <button class="tab-btn active" id="btn-cfg" onclick="showTab('cfg')">&#9881; Config</button>
-  <button class="tab-btn" id="btn-sch" onclick="showTab('sch')">&#128197; Schedule</button>
+  <button class="tab-btn active" id="btn-sch" onclick="showTab('sch')">&#128197; Schedule</button>
+  <button class="tab-btn" id="btn-cfg" onclick="showTab('cfg')">&#9881; Config</button>
 </div>
 
 <!-- Config Tab -->
-<div id="tab-cfg">
+<div id="tab-cfg" style="display:none">
 <form id="configForm">
 <h2>Timezone &amp; NTP</h2>
 <label for="tz">Timezone</label>
@@ -107,6 +115,7 @@ td.cd{font-variant-numeric:tabular-nums;color:#666;font-size:0.8em;white-space:n
 <input type="range" id="bright" name="bright" min="0" max="255" value="128">
 <span class="range-val" id="brightVal">128</span>
 </div>
+<div style="margin-top:6px;font-size:0.8em;color:#666">LDR: <span id="ldrVal">-</span> / 4095</div>
 
 <h2>Telegram Notifications</h2>
 <label for="bot">Bot Token</label>
@@ -153,7 +162,8 @@ Uptime: <span id="uptime">-</span>
 </div>
 
 <!-- Schedule Tab -->
-<div id="tab-sch" style="display:none">
+<div id="tab-sch">
+<div id="schPrev" style="display:none"></div>
 <div class="sch-hdr">
 <div class="rname" id="schName">Loading...</div>
 <div class="rloc" id="schLoc"></div>
@@ -175,10 +185,10 @@ const bright = $('bright');
 bright.oninput = () => $('brightVal').textContent = bright.value;
 
 function showTab(t) {
-  $('tab-cfg').style.display = t==='cfg' ? '' : 'none';
   $('tab-sch').style.display = t==='sch' ? '' : 'none';
-  $('btn-cfg').className = 'tab-btn' + (t==='cfg' ? ' active' : '');
+  $('tab-cfg').style.display = t==='cfg' ? '' : 'none';
   $('btn-sch').className = 'tab-btn' + (t==='sch' ? ' active' : '');
+  $('btn-cfg').className = 'tab-btn' + (t==='cfg' ? ' active' : '');
 }
 
 async function renderLogo() {
@@ -221,6 +231,7 @@ async function loadStatus() {
     $('status').textContent = 'Connected \u2014 ' + s.ip;
     $('heap').textContent   = s.heap   || '-';
     $('uptime').textContent = s.uptime || '-';
+    if (s.ldr !== undefined) $('ldrVal').textContent = s.ldr;
   } catch(e) { $('status').textContent = 'Connection error'; }
 }
 
@@ -337,10 +348,43 @@ async function loadSchedule() {
   try {
     const r = await fetch('/api/schedule');
     const d = await r.json();
-    $('schName').innerHTML = 'Round ' + d.round + ': ' + d.name + ' Grand Prix' +
-      (d.isSprint ? '<span class="sprint-badge">SPRINT</span>' : '');
-    $('schLoc').textContent = d.location;
-    schedSessions = d.sessions || [];
+    const prevDiv = $('schPrev');
+
+    if (d.postRace && d.next) {
+      // Post-race mode: collapsed card for finished race, next race expanded
+      const posColors = ['#ffd700','#c0c0c0','#cd7f32','#999','#999'];
+      const posLabels = ['1st','2nd','3rd','4th','5th'];
+      let podHtml = '';
+      if (d.resultsAvailable && d.podium && d.podium.length) {
+        podHtml = '<div class="pod-mini">' +
+          d.podium.map((p,i) =>
+            '<div class="p-row">' +
+            '<span class="p-pos" style="color:' + posColors[i] + '">' + posLabels[i] + '</span>' +
+            '<span class="p-name">' + p.name + '</span>' +
+            '<span class="p-team">' + p.team + '</span>' +
+            '</div>'
+          ).join('') + '</div>';
+      } else {
+        podHtml = '<div style="color:#555;font-size:0.8em;margin-top:6px">Results not yet available</div>';
+      }
+      prevDiv.style.display = '';
+      prevDiv.innerHTML = '<div class="post-race-card">' +
+        '<div class="post-race-label">&#x2714; Post-Race &mdash; R' + d.round + ': ' + d.name + ' Grand Prix</div>' +
+        podHtml + '</div>';
+
+      // Expand next race in main schedule area
+      const next = d.next;
+      $('schName').innerHTML = 'Round ' + next.round + ': ' + next.name + ' Grand Prix' +
+        (next.isSprint ? '<span class="sprint-badge">SPRINT</span>' : '');
+      $('schLoc').textContent = next.location;
+      schedSessions = next.sessions || [];
+    } else {
+      prevDiv.style.display = 'none';
+      $('schName').innerHTML = 'Round ' + d.round + ': ' + d.name + ' Grand Prix' +
+        (d.isSprint ? '<span class="sprint-badge">SPRINT</span>' : '');
+      $('schLoc').textContent = d.location;
+      schedSessions = d.sessions || [];
+    }
     renderSchedule();
   } catch(e) { $('schName').textContent = 'Failed to load schedule'; }
 }
@@ -540,19 +584,32 @@ void setupWebServer(AppConfig& cfg) {
         doc["heap"]   = String(ESP.getFreeHeap() / 1024) + " KB";
         doc["uptime"] = uptime;
         doc["ip"]     = WiFi.localIP().toString();
+        doc["ldr"]    = analogRead(PIN_LDR);
         String json;
         serializeJson(doc, json);
         request->send(200, "application/json", json);
     });
 
     // GET current race schedule as JSON (for Schedule tab)
+    // In post-race window: includes postRace=true, podium[], resultsAvailable, next{} object
     server.on("/api/schedule", HTTP_GET, [](AsyncWebServerRequest* request) {
         RaceData& race = getCurrentRace();
+        time_t now = nowUTC();
+
+        // Detect post-race window
+        bool inPostRace = (race.gpTimeUtc > 0 &&
+                           now >= race.gpTimeUtc &&
+                           (now - race.gpTimeUtc) < (POST_RACE_DAYS * 86400L));
+
         JsonDocument doc;
-        doc["name"]     = race.name;
-        doc["location"] = race.location;
-        doc["round"]    = race.round;
-        doc["isSprint"] = race.isSprint;
+        doc["name"]             = race.name;
+        doc["location"]         = race.location;
+        doc["round"]            = race.round;
+        doc["isSprint"]         = race.isSprint;
+        doc["postRace"]         = inPostRace;
+        doc["resultsAvailable"] = resultsAvailable;
+
+        // Current race sessions (always included — useful even in post-race for reference)
         JsonArray sessions = doc["sessions"].to<JsonArray>();
         for (uint8_t i = 0; i < race.sessionCount; i++) {
             JsonObject s = sessions.add<JsonObject>();
@@ -562,6 +619,37 @@ void setupWebServer(AppConfig& cfg) {
             s["type"]  = (uint8_t)race.sessions[i].type;
             s["utc"]   = (long)race.sessions[i].utcTime;
         }
+
+        // Podium results (if available)
+        if (resultsAvailable && podiumCount > 0) {
+            JsonArray pod = doc["podium"].to<JsonArray>();
+            for (uint8_t i = 0; i < podiumCount; i++) {
+                JsonObject p = pod.add<JsonObject>();
+                p["pos"]  = podium[i].position;
+                p["name"] = podium[i].driverName;
+                p["team"] = podium[i].constructor;
+            }
+        }
+
+        // Next race sessions (only when in post-race window and next race differs)
+        if (inPostRace && races[2].round != race.round && races[2].sessionCount > 0) {
+            RaceData& next = races[2];
+            JsonObject nextObj = doc["next"].to<JsonObject>();
+            nextObj["name"]     = next.name;
+            nextObj["location"] = next.location;
+            nextObj["round"]    = next.round;
+            nextObj["isSprint"] = next.isSprint;
+            JsonArray ns = nextObj["sessions"].to<JsonArray>();
+            for (uint8_t i = 0; i < next.sessionCount; i++) {
+                JsonObject s = ns.add<JsonObject>();
+                s["label"] = next.sessions[i].label;
+                s["day"]   = next.sessions[i].dayAbbrev;
+                s["time"]  = next.sessions[i].localTime;
+                s["type"]  = (uint8_t)next.sessions[i].type;
+                s["utc"]   = (long)next.sessions[i].utcTime;
+            }
+        }
+
         String json;
         serializeJson(doc, json);
         request->send(200, "application/json", json);
