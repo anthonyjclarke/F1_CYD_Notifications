@@ -92,6 +92,35 @@ String loadCachedSchedule() {
     return json;
 }
 
+// Save last known good UTC epoch to LittleFS.
+// Called after each successful NTP sync so future reboots have a plausible fallback.
+bool saveLastKnownTime(time_t t) {
+    JsonDocument doc;
+    doc["t"] = (long)t;
+    File f = LittleFS.open(TIME_CACHE_FILE, "w");
+    if (!f) {
+        DBG_WARN("[Config] Failed to open %s for write", TIME_CACHE_FILE);
+        return false;
+    }
+    serializeJson(doc, f);
+    f.close();
+    DBG_VERBOSE("[Config] Last-known time saved: %ld", (long)t);
+    return true;
+}
+
+// Load last known good UTC epoch from LittleFS.
+// Returns 0 if no saved time exists or file is unreadable.
+time_t loadLastKnownTime() {
+    File f = LittleFS.open(TIME_CACHE_FILE, "r");
+    if (!f) return 0;
+    JsonDocument doc;
+    if (deserializeJson(doc, f)) { f.close(); return 0; }
+    f.close();
+    time_t t = (time_t)(long)doc["t"];
+    DBG_INFO("[Config] Loaded last-known time: %ld", (long)t);
+    return t;
+}
+
 // Cache results JSON
 bool cacheResults(const String& json) {
     File f = LittleFS.open(RESULTS_CACHE_FILE, "w");

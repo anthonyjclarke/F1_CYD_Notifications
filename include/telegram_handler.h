@@ -102,18 +102,22 @@ void checkNotifications(RaceData& race, AppConfig& cfg) {
 
     time_t now = nowUTC();
 
-    // Reset notification bits when we move to a new round
+    // Reset notification bits when we move to a new upcoming race round.
+    // During the overlap window (post-race R(n) + countdown to R(n+1)), parseSchedule
+    // advances getCurrentRace() to R(n+1) while R(n) results are still in memory.
+    // Preserve NOTIFY_RESULT in that case to prevent re-sending stale results.
     if (cfg.lastNotifiedRound != race.round) {
         DBG_INFO("[Telegram] New round (%d→%d), resetting notification bits",
                  cfg.lastNotifiedRound, race.round);
         cfg.lastNotifiedRound = race.round;
-        cfg.notificationBits = 0;
+        cfg.notificationBits = (resultsAvailable && podiumCount > 0) ? NOTIFY_RESULT : 0;
     }
 
-    // Race week notification - Monday of race week
+    // Race week notification - fires once when we first enter the countdown window.
+    // Previously required isMonday() but that caused misses during overlap windows or
+    // after late firmware deploys. The NOTIFY_RACE_WEEK dedup bit prevents re-sending.
     long daysToFirst = (race.firstSessionUtc - now) / 86400;
     if (daysToFirst >= 0 && daysToFirst <= COUNTDOWN_WEEK_DAYS &&
-        isMonday() &&
         !(cfg.notificationBits & NOTIFY_RACE_WEEK)) {
         DBG_INFO("[Telegram] Sending race week notification: %s", race.name);
         String msg = formatRaceWeekMessage(race);
@@ -145,11 +149,15 @@ void checkNotifications(RaceData& race, AppConfig& cfg) {
         }
     }
 
-    // Results notification - after GP
+    // Results notification - after GP.
+    // During the combined overlap window, getCurrentRace() is R(n+1) but podium data
+    // belongs to R(n). Use getPrevRace() when the current race GP hasn't happened yet.
     if (resultsAvailable && podiumCount > 0 &&
         !(cfg.notificationBits & NOTIFY_RESULT)) {
-        DBG_INFO("[Telegram] Sending race results notification");
-        String msg = formatResultsMessage(race, podium, podiumCount);
+        RaceData& raceForResults = (now >= race.gpTimeUtc) ? race : getPrevRace();
+        DBG_INFO("[Telegram] Sending race results notification for R%d (%s)",
+                 raceForResults.round, raceForResults.name);
+        String msg = formatResultsMessage(raceForResults, podium, podiumCount);
         if (sendTelegramMessage(cfg.chatId, msg)) {
             cfg.notificationBits |= NOTIFY_RESULT;
         }

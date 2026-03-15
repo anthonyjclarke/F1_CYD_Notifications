@@ -6,7 +6,7 @@
 // =============================================================
 
 // --- App Version ---
-#define APP_VERSION         "0.5.0"
+#define APP_VERSION         "0.5.1"
 
 // --- CYD Pin Mapping (v1/v2) ---
 // TFT display pins defined in platformio.ini build_flags
@@ -42,6 +42,7 @@
 #define CONFIG_FILE         "/config.json"
 #define RACE_CACHE_FILE     "/races.json"
 #define RESULTS_CACHE_FILE  "/results.json"
+#define TIME_CACHE_FILE     "/lasttime.json"
 
 // --- F1 Data URLs ---
 // Schedule source: https://github.com/sportstimes/f1
@@ -59,6 +60,13 @@
 #define COUNTDOWN_UPDATE_MS     1000                     // 1 second
 #define NOTIFICATION_CHECK_MS   (60UL * 1000)            // 1 minute
 #define BRIGHTNESS_CHECK_MS     (10UL * 1000)            // 10 seconds
+#define WIFI_CHECK_MS           (30UL * 1000)            // WiFi reconnect check interval
+#define TIME_SAVE_MS            (15UL * 60 * 1000)       // Periodic time save to LittleFS
+
+// --- Time Validation ---
+// Minimum plausible epoch: 2025-01-01 00:00:00 UTC.
+// Any saved or NTP time below this is treated as invalid.
+#define MIN_PLAUSIBLE_EPOCH     1735689600UL
 
 // --- Race Week ---
 #define COUNTDOWN_WEEK_DAYS     7           // Days before race to start countdown

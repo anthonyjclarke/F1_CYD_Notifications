@@ -14,16 +14,28 @@ Version scheme: `MAJOR.MINOR.PATCH`
   - Create a "Production" Flag that will not compile the diagnostics tools like Screenshot Capture
   - Stop Display Flicker on "RACE_WEEK_XXXXX"
   - How to maximise memory available for code
-  - Add my contact details and Github Repo to the Config page
 
 ## [Unreleased]
+
+---
+
+## [0.5.1] - 2026-03-16
+
+### Fixed
+- **Wrong race displayed after overnight run** — root cause: ESP32 has no battery-backed RTC; if NTP sync fails on boot (e.g. router WiFi sleeping, brief outage), `parseSchedule()` resolved the current race against a bad clock (often epoch or a very old time), making a past race appear upcoming and showing the wrong location/date on the countdown screen. Reboot forced a fresh NTP sync and corrected it.
+
+### Added
+- **Persistent last-known-good time** (`/lasttime.json` on LittleFS): UTC epoch saved after every successful NTP sync and every 15 minutes while running. On boot, if `waitForSync()` times out, the saved epoch is applied via `setTime()` as a fallback — keeping race schedule parsing correct even without network. Guarded by `MIN_PLAUSIBLE_EPOCH` (2025-01-01) to reject corrupt or empty files.
+- **WiFi reconnect detection** (`checkWiFiReconnect()`, polled every 30 s): detects loss of connectivity and calls `WiFi.reconnect()`; on reconnection immediately calls `resyncNTP()` to restore accurate time without waiting up to an hour for ezTime's automatic re-sync interval.
+- **`resyncNTP()`** in `time_utils.h`: sets ezTime sync interval to 1 s, calls `events()` to dispatch the NTP query, then restores the 1-hour interval — safe to call at any point from the main loop.
+- **Fallback warn log** in `getCountdownTarget()`: if no future sessions are found in the schedule or upcoming-races list (the "shouldn't happen" path), a `DBG_WARN` now logs `now()` to make NTP/schedule issues immediately visible in serial output.
 
 ---
 
 ## [0.5.0] - 2026-03-09
 
 ### Added
-- Combined race-week + post-race screen rotation: when previous race results are available during race week, display cycles through 6 screens (COUNTDOWN → SCHEDULE → TRACK → WINNER → DRIVERS → CONSTRUCTORS → loop) instead of the standard 3 race-week screens only
+- Combined race-week + post-race screen rotation: when previous race results are available during race week, display cycles through 5 screens (COUNTDOWN → EVENT_DETAILS → SCHEDULE → WINNER → DRIVERS → CONSTRUCTORS → loop) instead of the standard 3 race-week screens only
 - `getPrevRace()` in `f1_data.h` returns `races[0]` for use in combined mode; winner screen correctly attributes results to the previous race, not the upcoming one
 - `checkPostRaceExpiry()` in `main.cpp`: detects when the post-race window closes and immediately triggers a schedule refresh — eliminates up to 24h IDLE gap before race-week countdown activates
 - Boot-time post-race results fetch: if the device boots inside the post-race window, results are fetched immediately at startup rather than waiting up to 30 minutes for the first poll cycle
@@ -87,7 +99,6 @@ Version scheme: `MAJOR.MINOR.PATCH`
 - Fixed `fillRect` height parameter bug in "On Now" car image area clear
 
 ### Planned
-- Track circuit XBM images for all 24 2026 rounds
 - Touch calibration tuning on hardware
 - `initTelegram()` call in web config POST when bot token changes
 - `cacheResults()` wired into `fetchPostRaceData()` for reboot persistence
@@ -172,11 +183,10 @@ Version scheme: `MAJOR.MINOR.PATCH`
 - `include/wifi_setup.h` — WiFiManager captive portal with custom parameters for timezone, Telegram bot token and chat ID
 - `include/time_utils.h` — NTP initialisation via ezTime, IANA timezone, `formatLocalDay/Time/FullDate`, `getCountdown`, `isWithinHours`, `isMonday`, `daysSince`
 - `include/f1_data.h` — F1 schedule fetch from sportstimes GitHub JSON; post-race results, driver standings, constructor standings from Jolpica (Ergast-compatible) API; `parseSchedule` loads prev/current/next race into fixed array
-- `include/display_renderer.h` — all TFT_eSPI drawing functions: splash screen, schedule table, countdown (day/HH:MM:SS), track layout (XBM), race winner/podium, driver standings, constructor standings, status overlay, LDR auto-brightness
-- `include/display_states.h` — 7-state display state machine: `IDLE`, `RACE_WEEK_COUNTDOWN`, `RACE_WEEK_SCHEDULE`, `RACE_WEEK_TRACK`, `POST_RACE_WINNER`, `POST_RACE_DRIVERS`, `POST_RACE_CONSTRUCTORS`; auto-rotation via `millis()` timer; touch-driven manual advance
+- `include/display_renderer.h` — all TFT_eSPI drawing functions: splash screen, schedule table, countdown (day/HH:MM:SS), race winner/podium, driver standings, constructor standings, status overlay, LDR auto-brightness
+- `include/display_states.h` — 7-state display state machine: `IDLE`, `RACE_WEEK_COUNTDOWN`, `RACE_WEEK_EVENT_DETAILS`, `RACE_WEEK_SCHEDULE`, `POST_RACE_WINNER`, `POST_RACE_DRIVERS`, `POST_RACE_CONSTRUCTORS`, `POST_RACE_NEXT_RACE`; auto-rotation via `millis()` timer; touch-driven manual advance
 - `include/telegram_handler.h` — bot init, message formatting for race week / pre-session / results; `checkNotifications()` with per-round bitmask deduplication persisted to LittleFS
 - `include/web_server.h` — ESPAsyncWebServer config UI (PROGMEM HTML, dark F1-themed), `GET/POST /api/config`, `GET /api/status`; ElegantOTA at `/update`
-- `include/track_images.h` — XBM track image lookup scaffold; placeholder data; all 24 2026 circuit slugs listed; slot stubs ready for images
 - `src/main.cpp` — `setup()` / `loop()`; RGB LED boot status (blue=connecting, green=connected); resistive touch input; non-blocking `millis()` scheduling for: display updates (1 s countdown tick, 8/10 s screen rotation), notification checks (1 min), post-race results polling (30 min retry, 3–24 h window), schedule refresh (24 h), brightness update (10 s)
 - `CLAUDE.md` — project documentation for Claude Code: hardware, pin map, architecture, known issues, TODO list
 - `F1 Notification CYD Project_Brief.txt` — original project specification and feature requirements

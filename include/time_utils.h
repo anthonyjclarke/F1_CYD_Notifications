@@ -3,16 +3,24 @@
 #include <ezTime.h>
 #include "config.h"
 #include "debug.h"
+#include "config_manager.h"
 
 static Timezone myTZ;
+static bool _ntpSyncedOnce = false;  // True once a real NTP UDP response has been received
 
-// Initialize NTP and timezone
+// Returns true if time has been confirmed by at least one successful NTP sync this session.
+// Used to guard LittleFS time saves so a stale fallback epoch isn't re-saved over a good one.
+bool ntpHasSynced() { return _ntpSyncedOnce; }
+
+// Initialize NTP and timezone.
+// On success: NTP-synced time applied; epoch saved to LittleFS.
+// On failure: last saved epoch (if plausible) applied as fallback so date math stays sane.
+// Returns true if NTP sync succeeded, false if running on fallback time.
 bool initTime(const char* tzString, const char* ntpServer) {
     setServer(ntpServer);
     setInterval(3600);  // Re-sync every hour
 
-    // Always apply timezone, even if initial NTP sync times out.
-    // This ensures local date math is correct as soon as time becomes valid.
+    // Always apply timezone first so local date math is correct from the start.
     if (!myTZ.setLocation(tzString)) {
         DBG_WARN("[Time] Invalid timezone '%s', falling back to UTC", tzString);
         myTZ.setLocation("UTC");
@@ -21,13 +29,38 @@ bool initTime(const char* tzString, const char* ntpServer) {
     }
 
     DBG_INFO("[Time] Syncing NTP via %s", ntpServer);
-    if (!waitForSync(15)) {
-        DBG_WARN("[Time] NTP sync timed out (timezone already applied)");
-        return false;
+    if (waitForSync(15)) {
+        _ntpSyncedOnce = true;
+        DBG_INFO("[Time] NTP synced. now()=%ld", (long)::now());
+        saveLastKnownTime(::now());
+        return true;
     }
-    DBG_INFO("[Time] NTP synced");
-    DBG_INFO("[Time] Epoch check: now()=%ld UTC.now()=%ld", (long)::now(), (long)UTC.now());
-    return true;
+
+    // NTP timed out — try to restore last known good time from LittleFS so that
+    // race schedule parsing doesn't resolve the wrong race due to a bad clock.
+    DBG_WARN("[Time] NTP sync timed out");
+    time_t saved = loadLastKnownTime();
+    if (saved > MIN_PLAUSIBLE_EPOCH) {
+        setTime(saved);
+        DBG_WARN("[Time] Using saved time as fallback: %ld (~%d days stale)",
+                 (long)saved, (int)((millis() / 1000) / 86400));
+    } else {
+        DBG_ERROR("[Time] No valid fallback time — clock is unreliable");
+    }
+    return false;
+}
+
+// Force an NTP re-sync as soon as possible.
+// Safe to call after WiFi reconnects; non-blocking (re-sync happens on next events() call).
+void resyncNTP() {
+    DBG_INFO("[Time] Requesting NTP resync");
+    setInterval(1);  // Minimum interval — ezTime will query on next events() call
+    events();        // Process immediately; UDP response may arrive on subsequent calls
+    setInterval(3600);
+    // If sync succeeded synchronously, mark it
+    if (timeStatus() == timeSet && ::now() > MIN_PLAUSIBLE_EPOCH) {
+        _ntpSyncedOnce = true;
+    }
 }
 
 // Get current UTC time as time_t

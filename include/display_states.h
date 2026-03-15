@@ -6,7 +6,6 @@
 #include "time_utils.h"
 #include "display_renderer.h"
 #include "f1_data.h"
-#include "track_images.h"
 
 static DisplayState currentDisplayState = STATE_IDLE;
 static unsigned long lastDisplayChange = 0;
@@ -17,9 +16,9 @@ static bool displayPartialUpdate = false;  // true = only countdown digits need 
 static const char* stateName(DisplayState s) {
     switch (s) {
         case STATE_IDLE:                   return "IDLE";
-        case STATE_RACE_WEEK_COUNTDOWN:    return "RACE_WEEK_COUNTDOWN";
+        case STATE_RACE_WEEK_COUNTDOWN:     return "RACE_WEEK_COUNTDOWN";
+        case STATE_RACE_WEEK_EVENT_DETAILS: return "RACE_WEEK_EVENT_DETAILS";
         case STATE_RACE_WEEK_SCHEDULE:     return "RACE_WEEK_SCHEDULE";
-        case STATE_RACE_WEEK_TRACK:        return "RACE_WEEK_TRACK";
         case STATE_POST_RACE_WINNER:       return "POST_RACE_WINNER";
         case STATE_POST_RACE_DRIVERS:      return "POST_RACE_DRIVERS";
         case STATE_POST_RACE_CONSTRUCTORS: return "POST_RACE_CONSTRUCTORS";
@@ -91,7 +90,10 @@ static CountdownTarget getCountdownTarget(RaceData& race) {
         }
     }
 
-    // Fallback to first session of current race (shouldn't happen in normal operation)
+    // Fallback: no future sessions found anywhere — likely a bad clock or stale schedule.
+    // Returning firstSessionUtc causes the countdown to display the race's first session
+    // (which may be in the past). The warn helps diagnose NTP / schedule issues.
+    DBG_WARN("[Display] getCountdownTarget: no future sessions found — clock or schedule may be wrong (now=%ld)", (long)nowUTC());
     return {race.firstSessionUtc, race.sessions[0].type};
 }
 
@@ -125,26 +127,26 @@ void advanceDisplayState(DisplayState phase) {
 
     switch (phase) {
         case STATE_RACE_WEEK_COUNTDOWN:
+        case STATE_RACE_WEEK_EVENT_DETAILS:
         case STATE_RACE_WEEK_SCHEDULE:
-        case STATE_RACE_WEEK_TRACK:
             if (resultsAvailable) {
-                // Combined rotation: countdown → schedule → track → winner → drivers → constructors → countdown
+                // Combined rotation: countdown → event details → schedule → winner → drivers → constructors → countdown
                 switch (currentDisplayState) {
-                    case STATE_RACE_WEEK_COUNTDOWN:    currentDisplayState = STATE_RACE_WEEK_SCHEDULE; break;
-                    case STATE_RACE_WEEK_SCHEDULE:     currentDisplayState = STATE_RACE_WEEK_TRACK; break;
-                    case STATE_RACE_WEEK_TRACK:        currentDisplayState = STATE_POST_RACE_WINNER; break;
-                    case STATE_POST_RACE_WINNER:       currentDisplayState = STATE_POST_RACE_DRIVERS; break;
-                    case STATE_POST_RACE_DRIVERS:      currentDisplayState = STATE_POST_RACE_CONSTRUCTORS; break;
-                    case STATE_POST_RACE_CONSTRUCTORS: currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
-                    default:                           currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
+                    case STATE_RACE_WEEK_COUNTDOWN:     currentDisplayState = STATE_RACE_WEEK_EVENT_DETAILS; break;
+                    case STATE_RACE_WEEK_EVENT_DETAILS: currentDisplayState = STATE_RACE_WEEK_SCHEDULE; break;
+                    case STATE_RACE_WEEK_SCHEDULE:      currentDisplayState = STATE_POST_RACE_WINNER; break;
+                    case STATE_POST_RACE_WINNER:        currentDisplayState = STATE_POST_RACE_DRIVERS; break;
+                    case STATE_POST_RACE_DRIVERS:       currentDisplayState = STATE_POST_RACE_CONSTRUCTORS; break;
+                    case STATE_POST_RACE_CONSTRUCTORS:  currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
+                    default:                            currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
                 }
             } else {
-                // Standard rotation: countdown → schedule → track → countdown
+                // Standard rotation: countdown → event details → schedule → countdown
                 switch (currentDisplayState) {
-                    case STATE_RACE_WEEK_COUNTDOWN: currentDisplayState = STATE_RACE_WEEK_SCHEDULE; break;
-                    case STATE_RACE_WEEK_SCHEDULE:  currentDisplayState = STATE_RACE_WEEK_TRACK; break;
-                    case STATE_RACE_WEEK_TRACK:     currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
-                    default:                        currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
+                    case STATE_RACE_WEEK_COUNTDOWN:     currentDisplayState = STATE_RACE_WEEK_EVENT_DETAILS; break;
+                    case STATE_RACE_WEEK_EVENT_DETAILS: currentDisplayState = STATE_RACE_WEEK_SCHEDULE; break;
+                    case STATE_RACE_WEEK_SCHEDULE:      currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
+                    default:                            currentDisplayState = STATE_RACE_WEEK_COUNTDOWN; break;
                 }
             }
             break;
@@ -193,17 +195,14 @@ void renderCurrentState(RaceData& race, DisplayState phase) {
             drawCountdown(race, cd, partial);
             break;
         }
+        case STATE_RACE_WEEK_EVENT_DETAILS:
+            drawEventDetails(race);
+            break;
+
         case STATE_RACE_WEEK_SCHEDULE:
             drawScheduleTable(race);
             break;
 
-        case STATE_RACE_WEEK_TRACK: {
-            const uint8_t* trackImg = getTrackImage(race.slug);
-            uint16_t tw, th;
-            getTrackImageSize(race.slug, tw, th);
-            drawTrackLayout(trackImg, tw, th, race);
-            break;
-        }
         case STATE_POST_RACE_WINNER:
             // In combined race-week mode races[1] is the new race; use races[0] for previous race title
             drawRaceWinner(phase == STATE_RACE_WEEK_COUNTDOWN ? getPrevRace() : race);
@@ -240,8 +239,8 @@ void updateDisplay(RaceData& race) {
         phaseChanged = true;
     } else if (phase == STATE_RACE_WEEK_COUNTDOWN &&
                currentDisplayState != STATE_RACE_WEEK_COUNTDOWN &&
+               currentDisplayState != STATE_RACE_WEEK_EVENT_DETAILS &&
                currentDisplayState != STATE_RACE_WEEK_SCHEDULE &&
-               currentDisplayState != STATE_RACE_WEEK_TRACK &&
                // Don't reset if showing previous race results in combined mode
                !(resultsAvailable && (
                    currentDisplayState == STATE_POST_RACE_WINNER ||
