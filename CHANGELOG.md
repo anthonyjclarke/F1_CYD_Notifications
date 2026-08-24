@@ -19,6 +19,31 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ---
 
+## [0.5.2] - 2026-08-25
+
+### Added
+- Telegram Web UI verification controls:
+  - `Test Telegram` sends a fresh test message using the saved bot token and chat ID.
+  - `Resend Last` resends the last successfully delivered Telegram message.
+- Telegram API endpoints:
+  - `GET /api/telegram/status`
+  - `POST /api/telegram/test`
+  - `POST /api/telegram/resend`
+- `/telegram_last.txt` LittleFS cache for the last successfully sent Telegram message, allowing `Resend Last` to survive reboot.
+- Comprehensive Telegram setup and troubleshooting documentation for confirmation, test, and resend flows.
+
+### Changed
+- Web UI config save now detects Telegram token/chat changes, re-initializes the bot immediately, and attempts a confirmation message without requiring a reboot.
+- Telegram is considered enabled only when both bot token and chat ID are non-empty.
+- Config load derives Telegram enabled state from saved token/chat values to avoid stale `tgOn` values blocking valid credentials.
+- Documentation updated across README, Telegram setup guide, functional spec, and project notes for v0.5.2.
+
+### Fixed
+- Lost/re-entered Telegram credentials can now be validated immediately from the Web UI instead of waiting for the next scheduled race notification.
+- Changing Telegram credentials from the Web UI no longer leaves the running bot instance on the old token until reboot.
+
+---
+
 ## [0.5.1] - 2026-03-16
 
 ### Fixed
