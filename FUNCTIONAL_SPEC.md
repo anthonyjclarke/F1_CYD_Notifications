@@ -7,7 +7,7 @@ The device:
 - Connects to Wi-Fi and syncs time via NTP.
 - Fetches and caches Formula 1 schedule data.
 - Renders race countdown/schedule/results on TFT display.
-- Optionally sends Telegram notifications.
+- Optionally sends Telegram notifications, with Web UI test and resend controls.
 - Exposes a local web UI for configuration, status, schedule view, debug control, and OTA update.
 
 ## 2. Functional Specification
@@ -21,7 +21,7 @@ On boot, the firmware performs this sequence:
 5. Initialize RGB status LED (active-low).
 6. Mount LittleFS and load config from `/config.json` (or defaults if missing/invalid).
 7. Apply configured brightness.
-8. Connect Wi-Fi via WiFiManager captive portal (`F1-Display`, 180s timeout). Reboots on failure.
+8. Connect Wi-Fi via WiFiManager captive portal (`F1-Display`, timeout from `WIFI_TIMEOUT_SEC`). Reboots on failure.
 9. Sync NTP/timezone (`initTime`).
 10. Fetch F1 schedule from network; fallback to cached schedule from `/races.json`.
 11. Initialize Telegram client if enabled.
@@ -30,13 +30,14 @@ On boot, the firmware performs this sequence:
 
 ### 2.2 Data Sources and Race Model
 - Schedule source: `https://raw.githubusercontent.com/sportstimes/f1/main/_db/f1/2026.json`
-- Results/standings source: `http://api.jolpi.ca/ergast/f1/2026`
+- Results/standings source: `https://api.jolpi.ca/ergast/f1/2026`
 
 Schedule parse behavior:
 - Loads race fields: name, location, round, slug, sessions.
-- Finds current race anchor as first race where `gp + 7 days > now`.
+- Finds current race anchor as first race where `gp + POST_RACE_DAYS > now`.
 - Stores 3 races in RAM: previous/current-next/next-after.
 - Builds compact upcoming race list (up to 25 rounds) for web season table.
+- If the next race is already within the countdown window while the previous race is still in its post-race window, advances the current anchor to support combined race-week + previous-results rotation.
 
 Session modeling:
 - Supports FP1/FP2/FP3, Sprint Qualifying, Sprint, Qualifying, Race.
@@ -47,15 +48,16 @@ Session modeling:
 Display phases:
 - `IDLE`: outside race week, shows countdown to first session.
 - `RACE_WEEK_*`: starts when first session is within 7 days.
-- `POST_RACE_*`: starts after GP time and lasts up to 7 days.
+- `POST_RACE_*`: starts after GP time and lasts up to `POST_RACE_DAYS` days.
 
 Display states:
 - Countdown
 - Schedule table
-- Track layout
-- Race result podium
+- Event details
+- Race result top 5
 - Driver standings
 - Constructor standings
+- Next race countdown in pure post-race rotation
 
 Rotation behavior:
 - Race week states rotate every 8s.
@@ -63,9 +65,7 @@ Rotation behavior:
 - Countdown digits refresh every 1s with partial redraw to reduce flicker.
 - During active F1 sessions (FP1, FP2, FP3, Qualifying, Sprint Qualifying, Sprint, Race), countdown automatically switches to "On Now" display with F1 racing car image.
 - Touch press manually advances to next state in current phase.
-
-Track layouts:
-- Track image lookup currently returns `nullptr`; UI shows “Track image not available”.
+- If previous-race results are available during race week, race-week rotation includes winner, driver standings, and constructor standings screens after the standard countdown/event/schedule screens.
 
 ### 2.4 Brightness Control
 - Brightness range: `0..255`.
@@ -78,28 +78,38 @@ Telegram is active only if:
 - `telegramEnabled == true`
 - bot token configured and bot initialized
 - chat ID configured
+- `telegramEnabled` is derived from both token and chat ID being non-empty.
 
 Notification types:
-- Race-week message (Monday during race-week window).
+- Race-week message (first notification check during race-week window).
 - Pre-session messages (1 hour before): Qualifying, Sprint Qualifying, Sprint, Race.
 - Results message after post-race data becomes available.
+- Web UI test message via `POST /api/telegram/test`.
+- Last-message resend via `POST /api/telegram/resend`.
+
+Credential update behavior:
+- `POST /api/config` detects token/chat changes.
+- If both fields are configured, it immediately calls `initTelegram()` and attempts a confirmation test message.
+- If Telegram is no longer configured, it clears the running bot instance.
 
 Deduplication/state:
 - Per-round bitmask (`notificationBits`) prevents duplicates.
 - Bitmask resets when round changes (`lastNotifiedRound` mismatch).
 - Notification bits are persisted to `/config.json`.
+- The last successfully sent Telegram message is persisted separately at `/telegram_last.txt`.
+- `Resend Last` resends only that saved successful message; it does not reconstruct missed event notifications.
 
 ### 2.6 Post-Race Data Polling
 - Polling starts at GP + 3 hours.
 - Poll interval: every 30 minutes.
 - Polling stops when:
   - all post-race data fetches succeed, or
-  - GP + 24 hours is exceeded.
+  - GP + `RESULTS_GIVE_UP_SEC` is exceeded.
 
 Fetched post-race datasets:
-- Podium top 3 for race round.
-- Driver standings top 5 with current points tally.
-- Constructor standings top 5 with current points tally.
+- Race result top `MAX_PODIUM` for race round.
+- Driver standings top `STANDINGS_TOP_N` with current points tally.
+- Constructor standings top `STANDINGS_TOP_N` with current points tally.
 
 ### 2.7 Web UI and HTTP API
 Server:
@@ -111,7 +121,10 @@ Endpoints:
 - `GET /` web UI.
 - `GET /logo.raw` RGB565 F1 logo bytes.
 - `GET /api/config` current config JSON.
-- `POST /api/config` update timezone, NTP, Telegram credentials, brightness; saves config; reapplies time/brightness.
+- `POST /api/config` update timezone, NTP, Telegram credentials, brightness; saves config; reapplies time/brightness; re-initializes Telegram and sends a confirmation message when credentials change.
+- `GET /api/telegram/status` Telegram configured/ready/last-message status.
+- `POST /api/telegram/test` send a Telegram verification message.
+- `POST /api/telegram/resend` resend the last successfully sent Telegram message.
 - `GET /api/status` heap, uptime, IP.
 - `GET /api/schedule` current race sessions with local day/time and UTC.
 - `GET /api/races` compact upcoming season list.
@@ -160,6 +173,8 @@ Endpoints:
 Files:
 - `/config.json`: user configuration + notification state.
 - `/races.json`: cached schedule payload.
+- `/lasttime.json`: last-known-good UTC epoch for NTP fallback.
+- `/telegram_last.txt`: last successfully sent Telegram message.
 - `/results.json`: helper functions exist; currently not used by active flows.
 
 Config keys in `/config.json`:
@@ -172,11 +187,12 @@ Defaults when config missing/invalid:
 - Telegram disabled
 
 ### 3.5 Failure and Recovery Behavior
-- Wi-Fi connect failure after portal timeout -> device restart.
-- NTP sync failure -> continues without synced time (warnings logged).
+- Wi-Fi auto-connect failure -> device restart.
+- NTP sync failure -> falls back to `/lasttime.json` if it contains a plausible epoch; otherwise continues with warning.
 - Schedule fetch failure -> fallback to cached schedule; if cache unavailable, continues with warning/status message.
 - Post-race data partial failure -> marked incomplete and retried in next polling interval.
 - Telegram send failure -> no bit set for that message; can retry on next check if condition still true.
+- Telegram test/resend failure -> Web UI returns an error message and serial logs include `[Telegram]` details.
 
 ### 3.6 Observability and Control
 - Serial debug with runtime levels 0..4.
@@ -186,12 +202,11 @@ Defaults when config missing/invalid:
 ### 3.7 Security/Trust Characteristics (Current Implementation)
 - GitHub schedule fetch uses HTTPS with certificate verification disabled (`setInsecure()`).
 - Telegram client uses HTTPS with certificate verification disabled (`setInsecure()`).
-- Jolpica API calls are HTTP (plaintext).
+- Jolpica API calls use HTTPS with certificate verification disabled (`setInsecure()`).
 - Web UI and APIs are unauthenticated on local network.
 - OTA update endpoint is exposed through ElegantOTA default integration.
 
 ### 3.8 Known Functional Gaps
-- Track images are not yet implemented (`getTrackImage` currently returns no data).
 - Season year is hardcoded to 2026 in schedule/results URLs.
 - WiFiManager captures timezone/bot/chat only; NTP server and brightness are adjusted via web UI/config file.
 
@@ -201,5 +216,6 @@ Defaults when config missing/invalid:
 - Device refreshes schedule daily and retries results after race.
 - Device persists user config and notification bitmask.
 - Web UI can read/update config and show live status/schedule data.
+- Web UI can test Telegram credentials and resend the last successfully sent Telegram message.
 - Debug level can be changed at runtime.
 - OTA endpoint is reachable on local network.

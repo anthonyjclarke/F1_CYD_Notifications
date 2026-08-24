@@ -42,7 +42,7 @@ bool loadConfig(AppConfig& cfg) {
     cfg.brightness         = doc["bright"]   | 128;
     cfg.lastNotifiedRound  = doc["notRound"] | 0;
     cfg.notificationBits   = doc["notBits"]  | 0;
-    cfg.telegramEnabled    = doc["tgOn"]     | false;
+    cfg.telegramEnabled    = strlen(cfg.botToken) > 0 && strlen(cfg.chatId) > 0;
 
     DBG_INFO("[Config] Loaded: TZ=%s, Telegram=%s, Brightness=%d",
              cfg.timezone, cfg.telegramEnabled ? "on" : "off", cfg.brightness);

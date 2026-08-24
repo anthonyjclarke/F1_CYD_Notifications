@@ -19,7 +19,8 @@ void wmSaveParamsCallback() {
     if (wmTzParam)   strlcpy(_wmConfigPtr->timezone, wmTzParam->getValue(),  sizeof(_wmConfigPtr->timezone));
     if (wmBotParam)  strlcpy(_wmConfigPtr->botToken, wmBotParam->getValue(), sizeof(_wmConfigPtr->botToken));
     if (wmChatParam) strlcpy(_wmConfigPtr->chatId,   wmChatParam->getValue(), sizeof(_wmConfigPtr->chatId));
-    _wmConfigPtr->telegramEnabled = strlen(_wmConfigPtr->botToken) > 0;
+    _wmConfigPtr->telegramEnabled =
+        strlen(_wmConfigPtr->botToken) > 0 && strlen(_wmConfigPtr->chatId) > 0;
     saveConfig(*_wmConfigPtr);
     DBG_INFO("[WiFi] Params saved from captive portal");
 }

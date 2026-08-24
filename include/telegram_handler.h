@@ -2,6 +2,7 @@
 
 #include <WiFiClientSecure.h>
 #include <UniversalTelegramBot.h>
+#include <LittleFS.h>
 #include "config.h"
 #include "types.h"
 #include "debug.h"
@@ -11,8 +12,44 @@ static WiFiClientSecure telegramClient;
 static UniversalTelegramBot* bot = nullptr;
 static bool telegramReady = false;
 
+bool telegramIsReady() {
+    return telegramReady && bot != nullptr;
+}
+
+bool telegramHasLastMessage() {
+    File f = LittleFS.open(TELEGRAM_LAST_FILE, "r");
+    if (!f) return false;
+    bool hasMessage = f.size() > 0;
+    f.close();
+    return hasMessage;
+}
+
+bool saveLastTelegramMessage(const String& message) {
+    File f = LittleFS.open(TELEGRAM_LAST_FILE, "w");
+    if (!f) {
+        DBG_WARN("[Telegram] Failed to save last message");
+        return false;
+    }
+    f.print(message);
+    f.close();
+    return true;
+}
+
+String loadLastTelegramMessage() {
+    File f = LittleFS.open(TELEGRAM_LAST_FILE, "r");
+    if (!f) return "";
+    String message = f.readString();
+    f.close();
+    return message;
+}
+
 // Initialize Telegram bot
 void initTelegram(const char* token) {
+    if (bot) {
+        delete bot;
+        bot = nullptr;
+    }
+
     if (strlen(token) == 0) {
         DBG_WARN("[Telegram] No bot token configured");
         telegramReady = false;
@@ -34,10 +71,41 @@ bool sendTelegramMessage(const char* chatId, const String& message) {
     bool ok = bot->sendMessage(chatId, message, "");
     if (ok) {
         DBG_INFO("[Telegram] Message sent OK");
+        saveLastTelegramMessage(message);
     } else {
         DBG_WARN("[Telegram] Send failed");
     }
     return ok;
+}
+
+String formatTelegramConfigTestMessage() {
+    String msg = "F1 Display Telegram test\n\n";
+    msg += "Telegram credentials are configured and this chat can receive messages.";
+    return msg;
+}
+
+bool sendTelegramConfigTest(const AppConfig& cfg) {
+    if (!cfg.telegramEnabled || strlen(cfg.botToken) == 0 || strlen(cfg.chatId) == 0) {
+        DBG_WARN("[Telegram] Test skipped: token/chat not configured");
+        return false;
+    }
+    if (!telegramIsReady()) {
+        initTelegram(cfg.botToken);
+    }
+    return sendTelegramMessage(cfg.chatId, formatTelegramConfigTestMessage());
+}
+
+bool resendLastTelegramMessage(const AppConfig& cfg) {
+    String message = loadLastTelegramMessage();
+    if (message.length() == 0) {
+        DBG_WARN("[Telegram] No saved message to resend");
+        return false;
+    }
+    if (!telegramIsReady()) {
+        initTelegram(cfg.botToken);
+    }
+    DBG_INFO("[Telegram] Resending last saved message");
+    return sendTelegramMessage(cfg.chatId, message);
 }
 
 // Format race week notification message

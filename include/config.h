@@ -6,7 +6,7 @@
 // =============================================================
 
 // --- App Version ---
-#define APP_VERSION         "0.5.1"
+#define APP_VERSION         "0.5.2"
 
 // --- CYD Pin Mapping (v1/v2) ---
 // TFT display pins defined in platformio.ini build_flags
@@ -36,13 +36,14 @@
 // --- WiFi ---
 #define WIFI_AP_NAME        "F1-Display"
 #define WIFI_AP_PASSWORD    ""
-#define WIFI_TIMEOUT_SEC    180
+#define WIFI_TIMEOUT_SEC    0
 
 // --- File Paths (LittleFS) ---
 #define CONFIG_FILE         "/config.json"
 #define RACE_CACHE_FILE     "/races.json"
 #define RESULTS_CACHE_FILE  "/results.json"
 #define TIME_CACHE_FILE     "/lasttime.json"
+#define TELEGRAM_LAST_FILE  "/telegram_last.txt"
 
 // --- F1 Data URLs ---
 // Schedule source: https://github.com/sportstimes/f1

@@ -1,7 +1,7 @@
 # F1 CYD Notifications
 
-<!-- Note: Update version badge below when FIRMWARE_VERSION changes in include/config.h -->
-![Version](https://img.shields.io/badge/version-0.5.1-blue.svg)
+<!-- Note: Update version badge below when APP_VERSION changes in include/config.h -->
+![Version](https://img.shields.io/badge/version-0.5.2-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-ESP32-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
 
@@ -9,9 +9,7 @@ F1 race-week display and notification firmware for the **ESP32-2432S028R (Cheap 
 
 I have to start by recognising the great work by @witnessmenow with https://github.com/witnessmenow/F1-Arduino-Notifications.  I started this project out with a Fork to "modernise" and add some features that I wanted but hit a wall so started afresh with a project brief and ask my good friend Claude.ai to get started.  This is what we now have, still more to do, but I'm happy with the little CYD on my desk keeping me updated!
 
-I need to get the documentation updated on setting up Telegram (which I think all works ok!)
-
-The device shows upcoming F1 sessions, race-week countdown, and post-race data on the 320x240 TFT, with optional Telegram alerts and a local web UI for configuration + OTA updates.
+The device shows upcoming F1 sessions, race-week countdown, and post-race data on the 320x240 TFT, with optional Telegram alerts and a local web UI for configuration, Telegram testing, screenshots, and OTA updates.
 
 ![Telegram Message](./images/Telegram.jpg)
 
@@ -23,7 +21,7 @@ The device shows upcoming F1 sessions, race-week countdown, and post-race data o
 - Fetches 2026 F1 schedule from Sportstimes JSON
 - Displays rotating race-week and post-race screens on TFT
 - Polls post-race results/standings from Jolpica API
-- Sends Telegram notifications (race week, pre-session, result)
+- Sends Telegram notifications (race week, pre-session, result) with Web UI test/resend controls
 - Serves local config/status UI and OTA firmware update page
 - Captures live TFT screenshots to MicroSD as BMP files
   
@@ -62,14 +60,18 @@ pio run
 ### 2. Upload firmware
 
 ```bash
-pio run -t upload
+pio run -t upload --upload-port /dev/cu.usbserial-REPLACE_ME
 ```
+
+Replace `/dev/cu.usbserial-REPLACE_ME` with your current ESP32 serial port. The port name can change after reconnecting the board or changing USB ports.
 
 ### 3. Upload LittleFS (if needed)
 
 ```bash
-pio run -t uploadfs
+pio run -t uploadfs --upload-port /dev/cu.usbserial-REPLACE_ME
 ```
+
+Use the same current serial port here as the firmware upload command.
 
 ### 4. Open serial monitor
 
@@ -184,11 +186,16 @@ Touch input manually advances to the next state in the active phase.
 
 ## Telegram Notifications
 
-Enabled when bot token + chat ID are configured (see details in TELEGRAM_SETUP.md)
+Enabled when both bot token and chat ID are configured (see details in [TELEGRAM_SETUP.md](./TELEGRAM_SETUP.md)).
+
+When Telegram credentials are changed in the Web UI, the firmware re-initializes the bot immediately and sends a confirmation message to the configured chat. The Config tab also provides:
+
+- **Test Telegram**: sends a verification message using the saved token/chat ID.
+- **Resend Last**: resends the last Telegram message that was successfully delivered and saved on LittleFS.
 
 Notification types:
 
-- Race week notification (Monday in race-week window)
+- Race week notification (first notification check inside race-week window)
 - Pre-session notification (1 hour before):
   - Sprint Qualifying
   - Sprint
@@ -196,7 +203,7 @@ Notification types:
   - Race
 - Race result notification after data becomes available
 
-Duplicate suppression is handled with per-round bitmask persistence in config.
+Duplicate suppression is handled with per-round bitmask persistence in config. The resend cache is stored separately at `/telegram_last.txt`; it can survive reboot, but it only contains a message that previously sent successfully.
 
 ## Web UI
 
@@ -217,6 +224,9 @@ Base URL: `http://<device-ip>/`
 - `GET /api/config` current config JSON
 - `POST /api/config` update config
   - Timezone and NTP server can be selected from curated dropdowns in the Web UI
+- `GET /api/telegram/status` Telegram configured/ready/last-message status
+- `POST /api/telegram/test` send a Telegram verification message
+- `POST /api/telegram/resend` resend the last successfully sent Telegram message
 - `GET /api/status` heap/uptime/IP
 - `GET /api/schedule` current race sessions
 - `GET /api/races` upcoming rounds list
@@ -280,6 +290,7 @@ LittleFS files:
 - `/config.json` user settings + notification state
 - `/races.json` cached schedule payload
 - `/lasttime.json` last-known-good UTC epoch (NTP fallback for failed-sync boots)
+- `/telegram_last.txt` last successfully sent Telegram message, used by `Resend Last`
 - `/results.json` reserved helper cache (not active in current flow)
 
 Config keys (`/config.json`):

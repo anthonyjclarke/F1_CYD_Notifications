@@ -8,6 +8,8 @@ In this firmware, Telegram is used to **send outbound notifications**:
 - Race week notification
 - Pre-session notifications (1 hour before)
 - Race result notification
+- Manual verification message from the Web UI
+- Manual resend of the last successfully sent Telegram message
 
 This project does **not** currently read inbound Telegram commands/messages.
 
@@ -73,6 +75,36 @@ Set:
 
 Then save.
 
+When Telegram credentials are changed in the Web UI, the firmware immediately re-initializes the bot and sends a confirmation message to the configured chat. The save banner reports whether that confirmation was sent.
+
+The Config tab also includes:
+- `Test Telegram` - sends a fresh verification message using the saved token/chat ID.
+- `Resend Last` - resends the last Telegram message that was successfully sent and saved by the device.
+
+### Using `Test Telegram`
+
+1. Open `http://<device-ip>/`.
+2. Select the Config tab.
+3. Confirm Bot Token and Chat ID are populated.
+4. If either value changed, click `Save Configuration` first.
+5. Click `Test Telegram`.
+
+Expected Telegram message:
+
+```text
+F1 Display Telegram test
+
+Telegram credentials are configured and this chat can receive messages.
+```
+
+If the Web UI reports `Telegram test failed`, check the troubleshooting section below.
+
+### Using `Resend Last`
+
+Click `Resend Last` from the Config tab to resend the last Telegram message that the ESP32 successfully delivered. This message is saved to LittleFS at `/telegram_last.txt`, so it survives reboot.
+
+`Resend Last` is useful after replacing credentials or confirming the bot still works, but it cannot recreate an event notification that never sent successfully.
+
 Stored in `/config.json` as:
 - `bot`
 - `chat`
@@ -81,17 +113,22 @@ Stored in `/config.json` as:
 ## 6. Verify Notifications Are Enabled
 
 From firmware logic:
-- `telegramEnabled` is set true when bot token is non-empty.
-- Sending still requires a valid non-empty chat ID.
+- `telegramEnabled` is set true when both bot token and chat ID are non-empty.
+- The Web UI confirmation or `Test Telegram` button verifies that Telegram accepted the send.
 
 So both must be configured:
 - Token
 - Chat ID
 
+Related local API endpoints:
+- `GET /api/telegram/status`
+- `POST /api/telegram/test`
+- `POST /api/telegram/resend`
+
 ## 7. Notification Timing in This Project
 
 Implemented notifications:
-- Race week (Monday within race week window)
+- Race week (first notification check within the race week window)
 - Pre-session (1 hour before):
   - Qualifying
   - Sprint Qualifying
@@ -104,10 +141,11 @@ Deduplication:
 
 ## 8. Known Behavior / Current Limitation
 
-If Telegram token is changed from the Web UI, the running bot instance is not re-initialized immediately in current code path.
+The device stores the last successfully sent Telegram message in LittleFS so `Resend Last` can survive a reboot.
 
-Recommendation:
-- Reboot after changing token/chat ID to guarantee new credentials are active.
+Limits:
+- If no Telegram message has ever been sent successfully, there is nothing to resend.
+- `Resend Last` does not reconstruct a missed event notification; it only resends the saved last-successful message.
 
 ## 9. Group Chat Setup (Optional)
 
@@ -139,7 +177,9 @@ Check serial logs for `[Telegram]` lines and verify:
 
 ### Notifications not appearing after config change
 
-- Reboot device after changing Telegram fields.
+- Use `Test Telegram` in the Web UI.
+- If the test fails, check token/chat ID and confirm you have sent `/start` to the bot.
+- If the test succeeds but an event notification was missed, use `Resend Last` only if the previous message had already been sent successfully.
 
 ## 11. Security Notes
 

@@ -14,6 +14,7 @@
 #include "display_renderer.h"
 #include "display_states.h"
 #include "screenshot_capture.h"
+#include "telegram_handler.h"
 #include "timezone_ntp_options.h"
 
 static AsyncWebServer server(WEB_SERVER_PORT);
@@ -43,6 +44,10 @@ input:focus{border-color:#e10600;outline:none}
 button{width:100%;padding:12px;margin-top:20px;border:none;border-radius:6px;background:#e10600;color:#fff;font-size:1em;font-weight:bold;cursor:pointer}
 button:hover{background:#ff1801}
 .btn-sm{width:auto;padding:8px 16px;margin-top:0}
+.btn-row{display:flex;gap:8px;margin-top:10px}
+.btn-row button{flex:1;margin-top:0}
+.btn-secondary{background:#222;border:1px solid #444;color:#eee}
+.btn-secondary:hover{background:#333}
 .msg{text-align:center;padding:10px;margin-top:10px;border-radius:6px;display:none}
 .msg.ok{display:block;background:#0a3d0a;color:#4caf50}
 .msg.err{display:block;background:#3d0a0a;color:#f44}
@@ -122,6 +127,10 @@ td.cd{font-variant-numeric:tabular-nums;color:#666;font-size:0.8em;white-space:n
 <input type="text" id="bot" name="bot" placeholder="123456:ABC-DEF...">
 <label for="chat">Chat ID</label>
 <input type="text" id="chat" name="chat" placeholder="123456789">
+<div class="btn-row">
+<button type="button" class="btn-secondary" onclick="telegramAction('test')">Test Telegram</button>
+<button type="button" class="btn-secondary" onclick="telegramAction('resend')">Resend Last</button>
+</div>
 
 <button type="submit">Save Configuration</button>
 </form>
@@ -249,6 +258,20 @@ async function setDbg() {
   } catch(e) {}
 }
 
+async function telegramAction(action) {
+  const msg = $('msg');
+  try {
+    const r = await fetch('/api/telegram/' + action, {method:'POST'});
+    const d = await r.json();
+    msg.className = r.ok && d.sent ? 'msg ok' : 'msg err';
+    msg.textContent = d.message || (d.sent ? 'Telegram message sent' : 'Telegram send failed');
+  } catch(e) {
+    msg.className = 'msg err';
+    msg.textContent = 'Telegram error: ' + e.message;
+  }
+  setTimeout(() => msg.style.display = 'none', 8000);
+}
+
 async function captureShot() {
   const msg = $('msg');
   try {
@@ -321,12 +344,20 @@ $('configForm').onsubmit = async (e) => {
       bright: bright.value
     });
     const r = await fetch('/api/config', {method:'POST', body});
+    const d = await r.json().catch(() => ({}));
     msg.className   = r.ok ? 'msg ok'  : 'msg err';
-    msg.textContent = r.ok ? 'Configuration saved!' : 'Save failed';
+    if (r.ok && d.telegramConfigured && d.telegramChanged) {
+      msg.textContent = d.telegramTestSent ?
+        'Configuration saved. Telegram confirmation sent.' :
+        'Configuration saved. Telegram confirmation failed.';
+      if (!d.telegramTestSent) msg.className = 'msg err';
+    } else {
+      msg.textContent = r.ok ? 'Configuration saved!' : 'Save failed';
+    }
   } catch(e) {
     msg.className = 'msg err'; msg.textContent = 'Error: ' + e.message;
   }
-  setTimeout(() => msg.style.display = 'none', 3000);
+  setTimeout(() => msg.style.display = 'none', 8000);
 };
 
 // --- Schedule Tab ---
@@ -539,6 +570,11 @@ void setupWebServer(AppConfig& cfg) {
     server.on("/api/config", HTTP_POST, [](AsyncWebServerRequest* request) {
         if (!_webConfigPtr) { request->send(500); return; }
 
+        char oldBotToken[sizeof(_webConfigPtr->botToken)];
+        char oldChatId[sizeof(_webConfigPtr->chatId)];
+        strlcpy(oldBotToken, _webConfigPtr->botToken, sizeof(oldBotToken));
+        strlcpy(oldChatId, _webConfigPtr->chatId, sizeof(oldChatId));
+
         if (request->hasParam("tz", true))
             strlcpy(_webConfigPtr->timezone, request->getParam("tz", true)->value().c_str(),
                     sizeof(_webConfigPtr->timezone));
@@ -554,7 +590,11 @@ void setupWebServer(AppConfig& cfg) {
         if (request->hasParam("bright", true))
             _webConfigPtr->brightness = request->getParam("bright", true)->value().toInt();
 
-        _webConfigPtr->telegramEnabled = strlen(_webConfigPtr->botToken) > 0;
+        _webConfigPtr->telegramEnabled =
+            strlen(_webConfigPtr->botToken) > 0 && strlen(_webConfigPtr->chatId) > 0;
+        bool telegramChanged =
+            strcmp(oldBotToken, _webConfigPtr->botToken) != 0 ||
+            strcmp(oldChatId, _webConfigPtr->chatId) != 0;
 
         // Apply brightness immediately
         updateBrightness(_webConfigPtr->brightness);
@@ -569,9 +609,61 @@ void setupWebServer(AppConfig& cfg) {
         requestRedraw();
 
         saveConfig(*_webConfigPtr);
-        request->send(200, "application/json", "{\"ok\":true}");
+        bool telegramTestSent = false;
+        if (telegramChanged && _webConfigPtr->telegramEnabled) {
+            initTelegram(_webConfigPtr->botToken);
+            telegramTestSent = sendTelegramConfigTest(*_webConfigPtr);
+        } else if (telegramChanged && !_webConfigPtr->telegramEnabled) {
+            initTelegram("");
+        }
+
+        JsonDocument resp;
+        resp["ok"] = true;
+        resp["telegramConfigured"] = _webConfigPtr->telegramEnabled;
+        resp["telegramChanged"] = telegramChanged;
+        resp["telegramReady"] = telegramIsReady();
+        resp["telegramTestSent"] = telegramTestSent;
+        String json;
+        serializeJson(resp, json);
+        request->send(200, "application/json", json);
         DBG_INFO("[Web] Config updated via web UI");
 
+    });
+
+    // GET Telegram status
+    server.on("/api/telegram/status", HTTP_GET, [](AsyncWebServerRequest* request) {
+        if (!_webConfigPtr) { request->send(500); return; }
+        JsonDocument doc;
+        doc["configured"] = _webConfigPtr->telegramEnabled;
+        doc["ready"] = telegramIsReady();
+        doc["hasLastMessage"] = telegramHasLastMessage();
+        String json;
+        serializeJson(doc, json);
+        request->send(200, "application/json", json);
+    });
+
+    // POST Telegram test message
+    server.on("/api/telegram/test", HTTP_POST, [](AsyncWebServerRequest* request) {
+        if (!_webConfigPtr) { request->send(500); return; }
+        bool sent = sendTelegramConfigTest(*_webConfigPtr);
+        JsonDocument doc;
+        doc["sent"] = sent;
+        doc["message"] = sent ? "Telegram test sent" : "Telegram test failed";
+        String json;
+        serializeJson(doc, json);
+        request->send(sent ? 200 : 400, "application/json", json);
+    });
+
+    // POST resend the last successfully sent Telegram message
+    server.on("/api/telegram/resend", HTTP_POST, [](AsyncWebServerRequest* request) {
+        if (!_webConfigPtr) { request->send(500); return; }
+        bool sent = resendLastTelegramMessage(*_webConfigPtr);
+        JsonDocument doc;
+        doc["sent"] = sent;
+        doc["message"] = sent ? "Last Telegram message resent" : "No saved Telegram message to resend, or send failed";
+        String json;
+        serializeJson(doc, json);
+        request->send(sent ? 200 : 400, "application/json", json);
     });
 
     // GET status
