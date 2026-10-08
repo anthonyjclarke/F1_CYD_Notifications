@@ -57,7 +57,7 @@ void drawSplashScreen() {
     tft.setTextColor(COLOR_SESSION_TEXT);
     tft.drawString("Connecting to WiFi...", SCREEN_WIDTH / 2, 148);
     char verBuf[24];
-    snprintf(verBuf, sizeof(verBuf), "v%s", APP_VERSION);
+    snprintf(verBuf, sizeof(verBuf), "v%s", FIRMWARE_VERSION);
     tft.drawString(verBuf, SCREEN_WIDTH / 2, 220);
 }
 

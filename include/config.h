@@ -5,8 +5,13 @@
 // ESP32-2432S028R (2.8" Cheap Yellow Display)
 // =============================================================
 
-// --- App Version ---
-#define APP_VERSION         "0.5.2"
+// --- Firmware identity (read by the web installer tooling) ---
+// #define, not constexpr: display_renderer.h formats it with "%s" and the
+// tooling reads either form. PROJECT_NAME is frozen - Improv reports it and
+// ESP Web Tools offers "Update" only when it matches the manifest name.
+#define FIRMWARE_VERSION    "0.6.0-dev"
+#define PROJECT_NAME        "F1_CYD_Notifications"
+#define PROJECT_REPO_URL    "https://github.com/anthonyjclarke/F1_CYD_Notifications"
 
 // --- CYD Pin Mapping (v1/v2) ---
 // TFT display pins defined in platformio.ini build_flags
@@ -34,7 +39,8 @@
 #define BL_PWM_RES       8    // 8-bit (0-255)
 
 // --- WiFi ---
-#define WIFI_AP_NAME        "F1-Display"
+#define AP_NAME             "F1-Display"   // setup hotspot; shown by the installer page
+#define WIFI_AP_NAME        AP_NAME
 #define WIFI_AP_PASSWORD    ""
 #define WIFI_TIMEOUT_SEC    0
 

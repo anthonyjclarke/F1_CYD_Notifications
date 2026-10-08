@@ -1,6 +1,6 @@
 # F1 CYD Notifications
 
-<!-- Note: Update version badge below when APP_VERSION changes in include/config.h -->
+<!-- Note: Update version badge below when FIRMWARE_VERSION changes in include/config.h -->
 ![Version](https://img.shields.io/badge/version-0.5.2-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-ESP32-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
