@@ -60,6 +60,13 @@ F1 race schedule display and Telegram notification system for ESP32-2432S028R. F
 - **Notification deduplication**: Per-round bitmask persisted to LittleFS.
 - **Telegram config validation**: Web UI `POST /api/config` detects token/chat changes, re-initializes the bot immediately, and sends a confirmation message when both fields are present. `POST /api/telegram/test` sends a fresh verification message; `POST /api/telegram/resend` resends `/telegram_last.txt`.
 
+## Web installer and releases
+- Release images come only from CI on a `v*` tag on `main`; never publish a local build or `_site/` (`docs/WEB_INSTALLER.md`).
+- Never put `firmware-merged.bin` in a manifest – it fills NVS with 0xFF.
+- `PROJECT_NAME` and `min_spiffs.csv` are frozen; changing either breaks Update (partition change needs an erase note).
+- Improv is vendored in `lib/ImprovWiFi` – never add it back to `lib_deps`.
+- `improvTick()` must run at least every ~1 s; don't add blocking work to `loop()`.
+
 ## Known Quirks
 - Touch calibration untested (approximate: {300, 3600, 300, 3600, 7}).
 - Results not cached across reboots (cacheResults() never called).

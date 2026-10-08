@@ -13,6 +13,31 @@ The device shows upcoming F1 sessions, race-week countdown, and post-race data o
 
 ![Telegram Message](./images/Telegram.jpg)
 
+## Install
+
+**[anthonyjclarke.github.io/F1_CYD_Notifications][installer]** installs the
+latest release from the browser – no PlatformIO, no drivers to build. It needs
+desktop Chrome, Edge or Opera.
+
+1. Pick your board – CYD 2.8″ (ESP32-2432S028R).
+2. Plug it in with a USB data cable, click **Connect & install** and choose its
+   port.
+3. On a new board, say yes to erasing it. When flashing finishes, choose
+   **Configure WiFi** and pick your network. (Or skip it and join the
+   `F1-Display` hotspot, which opens the WiFiManager setup page.)
+4. **Visit device** opens the web UI. Set your timezone there, and for alerts
+   your own Telegram bot token and chat ID (see [TELEGRAM_SETUP.md](./TELEGRAM_SETUP.md)).
+   Telegram is optional; the display works without it.
+
+A board already running this firmware is recognised and offered **Update**,
+which keeps WiFi and every setting. Each [release][releases] also carries the
+images for flashing by hand. Use `*-firmware.bin` on the web UI's `/update`
+page (ElegantOTA). `*-merged.bin` is a clean install at `0x0` with esptool, and
+it **erases WiFi**; the LittleFS settings survive it.
+
+[installer]: https://anthonyjclarke.github.io/F1_CYD_Notifications/
+[releases]: https://github.com/anthonyjclarke/F1_CYD_Notifications/releases
+
 ## What It Does
 
 - Connects to Wi-Fi with captive portal onboarding (WiFiManager); auto-reconnects if connection drops
@@ -56,6 +81,19 @@ Project configuration: [platformio.ini](./platformio.ini)
 ```bash
 pio run
 ```
+
+To try the installer page against your own build, after `pio run`:
+
+```bash
+python3 ../cyd-web-installer/tools/make_manifests.py --out _site
+```
+
+```bash
+python3 -m http.server -d _site 8000
+```
+
+Never publish a local build or `_site/`. Release images are built only by CI
+on a `v*` tag (`.github/workflows/firmware.yml`).
 
 ### 2. Upload firmware
 

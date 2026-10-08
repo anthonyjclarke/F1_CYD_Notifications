@@ -19,7 +19,21 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ---
 
-## [0.5.2] - 2026-08-25
+## [0.6.0] Unreleased
+
+### Added
+- Browser installer at https://anthonyjclarke.github.io/F1_CYD_Notifications/ (ESP Web Tools): install, **Update** that keeps WiFi and settings, and WiFi setup over USB.
+- Improv-Serial always on (`src/network/improv_setup.*`, vendored `lib/ImprovWiFi` with the parser fix), served from `loop()` and from a now non-blocking WiFiManager portal.
+- `Firmware` GitHub Actions workflow using the shared `cyd-web-installer` reusable workflow: every push builds; a `v*` tag on `main` publishes the release (`*-firmware.bin`, `*-merged.bin`, `SHA256SUMS.txt`) and the installer page.
+- `tools/merge_bin.py` post-build script (`flash_parts.json`, `firmware-merged.bin`) and installer label on the `cyd` env.
+- Boot log line `Running from app0|app1`.
+
+### Changed
+- `APP_VERSION` renamed to `FIRMWARE_VERSION`; added `PROJECT_NAME` (`F1_CYD_Notifications`, frozen), `PROJECT_REPO_URL` and `AP_NAME` (`WIFI_AP_NAME` now aliases it).
+- Platform stays pinned at `espressif32@6.9.0`; partition table stays `min_spiffs.csv` (dual-OTA), so no erase is needed when updating from 0.5.x.
+- Changelog dates switched to DD-MM-YYYY.
+
+## [0.5.2] 25-08-2026
 
 ### Added
 - Telegram Web UI verification controls:
@@ -44,7 +58,7 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ---
 
-## [0.5.1] - 2026-03-16
+## [0.5.1] 16-03-2026
 
 ### Fixed
 - **Wrong race displayed after overnight run** — root cause: ESP32 has no battery-backed RTC; if NTP sync fails on boot (e.g. router WiFi sleeping, brief outage), `parseSchedule()` resolved the current race against a bad clock (often epoch or a very old time), making a past race appear upcoming and showing the wrong location/date on the countdown screen. Reboot forced a fresh NTP sync and corrected it.
@@ -57,7 +71,7 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ---
 
-## [0.5.0] - 2026-03-09
+## [0.5.0] 09-03-2026
 
 ### Added
 - Combined race-week + post-race screen rotation: when previous race results are available during race week, display cycles through 5 screens (COUNTDOWN → EVENT_DETAILS → SCHEDULE → WINNER → DRIVERS → CONSTRUCTORS → loop) instead of the standard 3 race-week screens only
@@ -84,7 +98,7 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ---
 
-## [0.4.0] - 2026-03-08
+## [0.4.0] 08-03-2026
 
 ### Added
 - SD screenshot capture subsystem (`include/screenshot_capture.h`) with:
@@ -137,7 +151,7 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ---
 
-## [0.3.0] - 2026-03-02
+## [0.3.0] 02-03-2026
 
 ### Added
 - **F1 logo on TFT splash screen** — `pushImage()` with `TFT_WHITE` transparency renders logo on dark background; replaces previous "F1" text header with branded image; thin red separator divides logo from subtitle text
@@ -157,7 +171,7 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ---
 
-## [0.2.0] - 2026-03-02
+## [0.2.0] 02-03-2026
 
 ### Added
 - `include/debug.h` — leveled serial logging system with runtime control
@@ -193,7 +207,7 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ---
 
-## [0.1.0] - 2026-03-02
+## [0.1.0] 02-03-2026
 
 ### Added
 - `platformio.ini` — ESP32-2432S028R (2.8" CYD) target
