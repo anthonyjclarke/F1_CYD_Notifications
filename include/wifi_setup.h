@@ -5,6 +5,7 @@
 #include "types.h"
 #include "debug.h"
 #include "config_manager.h"
+#include "network/improv_setup.h"
 
 // Custom WiFiManager parameters
 static WiFiManagerParameter* wmTzParam    = nullptr;
@@ -44,7 +45,19 @@ bool setupWiFi(AppConfig& cfg) {
     wm.setSaveParamsCallback(wmSaveParamsCallback);
 
     DBG_INFO("[WiFi] Starting WiFiManager (AP: %s, timeout: %ds)", WIFI_AP_NAME, WIFI_TIMEOUT_SEC);
+#if IMPROV_SETUP_ENABLED
+    // Non-blocking portal so Improv (web installer "Configure WiFi") is served
+    // alongside the captive portal on a device with no WiFi.
+    wm.setConfigPortalBlocking(false);
+#endif
     bool connected = wm.autoConnect(WIFI_AP_NAME, WIFI_AP_PASSWORD);
+#if IMPROV_SETUP_ENABLED
+    while (!connected && wm.getConfigPortalActive()) {
+        if (wm.process()) { connected = true; break; }
+        improvTick();  // restarts once Improv credentials connect
+        delay(5);
+    }
+#endif
 
     // Clean up
     delete wmTzParam;   wmTzParam = nullptr;

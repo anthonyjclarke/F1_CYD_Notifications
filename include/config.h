@@ -44,6 +44,10 @@
 #define WIFI_AP_PASSWORD    ""
 #define WIFI_TIMEOUT_SEC    0
 
+// --- Improv-Serial (web installer: WiFi setup + "Update" detection) ---
+#define IMPROV_SETUP_ENABLED   1
+#define IMPROV_DEVICE_PREFIX   "F1"   // macro: pasted into a string literal
+
 // --- File Paths (LittleFS) ---
 #define CONFIG_FILE         "/config.json"
 #define RACE_CACHE_FILE     "/races.json"

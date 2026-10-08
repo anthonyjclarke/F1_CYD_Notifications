@@ -8,9 +8,11 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <esp_ota_ops.h>
 
 #include "config.h"
 #include "debug.h"
+#include "network/improv_setup.h"
 #include "types.h"
 #include "config_manager.h"
 #include "wifi_setup.h"
@@ -183,8 +185,11 @@ void checkScheduleRefresh() {
 // =============================================================
 void setup() {
     Serial.begin(115200);
+    // Web installer over USB: answers ESP Web Tools from here on. See improv_setup.h.
+    improvBegin();
     delay(500);
-    DBG_INFO("=== F1 CYD Notifications ===");
+    DBG_INFO("=== F1 CYD Notifications v%s ===", FIRMWARE_VERSION);
+    DBG_INFO("Running from %s", esp_ota_get_running_partition()->label);
     DBG_INFO("[Main] Debug level: %d", debugLevel);
 
     // 1. Init display
@@ -310,6 +315,9 @@ void setup() {
 // LOOP
 // =============================================================
 void loop() {
+    // Web installer over USB: device info, WiFi changes. Must run at least every ~1s.
+    improvTick();
+
     // ezTime maintenance (NTP re-sync)
     events();
 
