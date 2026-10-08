@@ -7,3 +7,4 @@
 *.bin
 *.elf
 .DS_Store
+_site/
