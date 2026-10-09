@@ -41,11 +41,17 @@ One board, CI preview image, macOS Chrome.
 
 | Check                                      | Result | Date | Board MAC |
 |:-------------------------------------------|:-------|:-----|:----------|
-| CI green for every env (`cyd`)             | Pass   | 09-10-2026 | –   |
-| Erase, fresh install, yes to erase         | –      |      |           |
-| Configure WiFi (Improv), joins WiFi        | –      |      |           |
-| Boot log `Running from app0`, no crash     | –      |      |           |
-| Connect again: "Connected to" name + ver   | –      |      |           |
+| CI green for every env (`cyd`)             | Pass   | 10-10-2026 | –                 |
+| Erase, fresh install, yes to erase         | Pass   | 10-10-2026 | b0:cb:d8:da:ae:8c |
+| Configure WiFi (Improv), joins WiFi        | Pass   | 10-10-2026 | b0:cb:d8:da:ae:8c |
+| Boot log `Running from app0`, no crash     | Pass   | 10-10-2026 | b0:cb:d8:da:ae:8c |
+| Connect again: "Connected to" name + ver   | Pass   | 10-10-2026 | b0:cb:d8:da:ae:8c |
+
+Board: ESP32-D0WD-V3 2.8″ CYD, CI image from Firmware run 37964304664
+(`06285f1`). Connect showed "Connected to F1-CBB0 – F1_CYD_Notifications
+0.6.0-dev (ESP32)". After a reset the log showed `Running from app0`, WiFi
+joined, NTP synced, schedule fetched, setup completed with 213,976 B free
+heap, and the display rotation ran with no crash.
 
 ---
 
