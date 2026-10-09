@@ -28,6 +28,9 @@ Version scheme: `MAJOR.MINOR.PATCH`
 - `tools/merge_bin.py` post-build script (`flash_parts.json`, `firmware-merged.bin`) and installer label on the `cyd` env.
 - Boot log line `Running from app0|app1`.
 
+### Fixed
+- Vendored `lib/ImprovWiFi` re-copied from cyd-web-installer 1.0.1: each Improv packet now starts on a new line, so ESP Web Tools reliably parses the Connect reply and offers **Update** instead of **Install**.
+
 ### Changed
 - `APP_VERSION` renamed to `FIRMWARE_VERSION`; added `PROJECT_NAME` (`F1_CYD_Notifications`, frozen), `PROJECT_REPO_URL` and `AP_NAME` (`WIFI_AP_NAME` now aliases it).
 - Platform stays pinned at `espressif32@6.9.0`; partition table stays `min_spiffs.csv` (dual-OTA), so no erase is needed when updating from 0.5.x.
