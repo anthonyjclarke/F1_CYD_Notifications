@@ -19,6 +19,9 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ## [0.7.0] Unreleased
 
+### Changed
+- Removed the hardcoded `upload_port = /dev/cu.usbserial-240` from `platformio.ini`; PlatformIO auto-detects the port (override with `--upload-port`).
+
 ## [0.6.2] 10-10-2026
 
 ### Fixed
