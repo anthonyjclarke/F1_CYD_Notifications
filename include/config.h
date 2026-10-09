@@ -9,7 +9,7 @@
 // #define, not constexpr: display_renderer.h formats it with "%s" and the
 // tooling reads either form. PROJECT_NAME is frozen - Improv reports it and
 // ESP Web Tools offers "Update" only when it matches the manifest name.
-#define FIRMWARE_VERSION    "0.6.0"
+#define FIRMWARE_VERSION    "0.7.0-dev"
 #define PROJECT_NAME        "F1_CYD_Notifications"
 #define PROJECT_REPO_URL    "https://github.com/anthonyjclarke/F1_CYD_Notifications"
 
