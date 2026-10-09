@@ -66,6 +66,7 @@ F1 race schedule display and Telegram notification system for ESP32-2432S028R. F
 - `PROJECT_NAME` and `min_spiffs.csv` are frozen; changing either breaks Update (partition change needs an erase note).
 - Improv is vendored in `lib/ImprovWiFi` – never add it back to `lib_deps`.
 - `improvTick()` must run at least every ~1 s; don't add blocking work to `loop()`.
+- Before the next release, clear *Tests owed* in docs/WEB_INSTALLER.md (RUNBOOK 5b).
 
 ## Known Quirks
 - Touch calibration untested (approximate: {300, 3600, 300, 3600, 7}).

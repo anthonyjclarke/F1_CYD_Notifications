@@ -35,15 +35,28 @@ Connect on a board that is already running always answers.
 
 ---
 
-## Hardware test matrix
+## Smoke test (RUNBOOK 5a)
 
-| #   | Case                               | Expect                             | Status |
-|:----|:-----------------------------------|:-----------------------------------|:-------|
-| 1   | Fresh install, erased              | Install + erase; Improv WiFi       | –      |
-| 2   | Update on provisioned board        | "Update"; settings kept            | –      |
-| 3   | Board on `app1` (ElegantOTA)       | Update boots `app0`, settings kept | –      |
-| 5   | `*-firmware.bin` via `/update`     | Updates normally                   | –      |
-| 6   | macOS Chrome                       | Port found, flash completes        | –      |
-| 7   | Windows Edge                       | Optional – needs the user          | –      |
+One board, CI preview image, macOS Chrome.
 
-Case 4 (wrong board) does not apply: there is only one env.
+| Check                                      | Result | Date | Board MAC |
+|:-------------------------------------------|:-------|:-----|:----------|
+| CI green for every env (`cyd`)             | Pass   | 09-10-2026 | –   |
+| Erase, fresh install, yes to erase         | –      |      |           |
+| Configure WiFi (Improv), joins WiFi        | –      |      |           |
+| Boot log `Running from app0`, no crash     | –      |      |           |
+| Connect again: "Connected to" name + ver   | –      |      |           |
+
+---
+
+## Tests owed
+
+Smoke-tested only. Run these on the next real work on this project, or before
+the next release, and tick them off with date and board MAC. This is the first
+release with the installer on an ElegantOTA project, so case 3 matters.
+
+- [ ] Case 2 – Update on a provisioned board (settings kept)
+- [ ] Case 3 – Update from `app1` after an ElegantOTA `/update` (settings kept)
+- [ ] Case 5 – `*-firmware.bin` via the web UI's `/update`
+
+Case 1 has no remaining boards (one env), and case 4 does not apply.
