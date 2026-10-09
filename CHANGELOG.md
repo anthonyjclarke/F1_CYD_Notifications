@@ -19,6 +19,9 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ## [0.7.0] Unreleased
 
+### Fixed
+- Timezone fell back to UTC on boot ("Invalid timezone 'Europe/London'"). ezTime resolves IANA names over UDP via `timezoned.rop.nl` with a 2 s timeout that includes DNS, and the lookup ran straight after WiFi joined. `initTime()` now syncs NTP first, then applies the timezone (`applyTimezone()`) with up to 3 attempts and logs ezTime's error reason. Verified on hardware: "Timezone set: Europe/London (attempt 1)", local session times in BST.
+
 ---
 
 ## [0.6.0] 10-10-2026

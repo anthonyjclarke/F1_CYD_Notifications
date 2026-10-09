@@ -12,42 +12,57 @@ static bool _ntpSyncedOnce = false;  // True once a real NTP UDP response has be
 // Used to guard LittleFS time saves so a stale fallback epoch isn't re-saved over a good one.
 bool ntpHasSynced() { return _ntpSyncedOnce; }
 
+// Apply an IANA timezone. ezTime resolves the name with a UDP query to
+// timezoned.rop.nl and its 2s timeout includes the DNS lookup, so the first
+// try straight after WiFi joins can time out. Call it after NTP (network warm)
+// and retry a few times before falling back to UTC.
+static constexpr uint8_t TZ_LOOKUP_ATTEMPTS = 3;
+
+void applyTimezone(const char* tzString) {
+    for (uint8_t attempt = 1; attempt <= TZ_LOOKUP_ATTEMPTS; attempt++) {
+        if (myTZ.setLocation(tzString)) {
+            DBG_INFO("[Time] Timezone set: %s (attempt %u)", tzString, attempt);
+            return;
+        }
+        DBG_WARN("[Time] Timezone lookup %u/%u for '%s' failed: %s", attempt,
+                 TZ_LOOKUP_ATTEMPTS, tzString, errorString().c_str());
+    }
+    DBG_WARN("[Time] Invalid timezone '%s', falling back to UTC", tzString);
+    myTZ.setLocation("UTC");
+}
+
 // Initialize NTP and timezone.
 // On success: NTP-synced time applied; epoch saved to LittleFS.
 // On failure: last saved epoch (if plausible) applied as fallback so date math stays sane.
+// The timezone is applied last, once the network has carried NTP traffic.
 // Returns true if NTP sync succeeded, false if running on fallback time.
 bool initTime(const char* tzString, const char* ntpServer) {
     setServer(ntpServer);
     setInterval(3600);  // Re-sync every hour
 
-    // Always apply timezone first so local date math is correct from the start.
-    if (!myTZ.setLocation(tzString)) {
-        DBG_WARN("[Time] Invalid timezone '%s', falling back to UTC", tzString);
-        myTZ.setLocation("UTC");
-    } else {
-        DBG_INFO("[Time] Timezone set: %s", tzString);
-    }
-
+    bool synced = false;
     DBG_INFO("[Time] Syncing NTP via %s", ntpServer);
     if (waitForSync(15)) {
         _ntpSyncedOnce = true;
+        synced = true;
         DBG_INFO("[Time] NTP synced. now()=%ld", (long)::now());
         saveLastKnownTime(::now());
-        return true;
+    } else {
+        // NTP timed out — try to restore last known good time from LittleFS so that
+        // race schedule parsing doesn't resolve the wrong race due to a bad clock.
+        DBG_WARN("[Time] NTP sync timed out");
+        time_t saved = loadLastKnownTime();
+        if (saved > MIN_PLAUSIBLE_EPOCH) {
+            setTime(saved);
+            DBG_WARN("[Time] Using saved time as fallback: %ld (~%d days stale)",
+                     (long)saved, (int)((millis() / 1000) / 86400));
+        } else {
+            DBG_ERROR("[Time] No valid fallback time — clock is unreliable");
+        }
     }
 
-    // NTP timed out — try to restore last known good time from LittleFS so that
-    // race schedule parsing doesn't resolve the wrong race due to a bad clock.
-    DBG_WARN("[Time] NTP sync timed out");
-    time_t saved = loadLastKnownTime();
-    if (saved > MIN_PLAUSIBLE_EPOCH) {
-        setTime(saved);
-        DBG_WARN("[Time] Using saved time as fallback: %ld (~%d days stale)",
-                 (long)saved, (int)((millis() / 1000) / 86400));
-    } else {
-        DBG_ERROR("[Time] No valid fallback time — clock is unreliable");
-    }
-    return false;
+    applyTimezone(tzString);
+    return synced;
 }
 
 // Force an NTP re-sync as soon as possible.

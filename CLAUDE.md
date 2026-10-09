@@ -69,6 +69,7 @@ F1 race schedule display and Telegram notification system for ESP32-2432S028R. F
 - Before the next release, clear *Tests owed* in docs/WEB_INSTALLER.md (RUNBOOK 5b).
 
 ## Known Quirks
+- ezTime `setLocation()` needs network: a UDP lookup to `timezoned.rop.nl` (2 s timeout incl. DNS). Call it after NTP sync (`applyTimezone()` retries); never before WiFi is warm.
 - Touch calibration untested (approximate: {300, 3600, 300, 3600, 7}).
 - Results not cached across reboots (cacheResults() never called).
 - `track_images.h` and `web_about.h` are unused scaffold, moved to `archive/` — not `#include`d anywhere. The web UI "About" section is hand-inlined in `web_server.h`; edit it there, not in the archived `web_about.h`.
