@@ -19,7 +19,7 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ---
 
-## [0.6.0] Unreleased
+## [0.6.0] 10-10-2026
 
 ### Added
 - Browser installer at https://anthonyjclarke.github.io/F1_CYD_Notifications/ (ESP Web Tools): install, **Update** that keeps WiFi and settings, and WiFi setup over USB.
