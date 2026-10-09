@@ -1,94 +1,64 @@
 #pragma once
 
-// Curated list of popular IANA timezones and GMT offsets for WebUI dropdowns
-
-// IANA timezone strings (for real-world locations)
-static constexpr const char* TIMEZONE_OPTIONS[] = {
-    // UTC
-    "UTC",
-    
-    // Europe
-    "Europe/London",
-    "Europe/Paris",
-    "Europe/Amsterdam",
-    "Europe/Berlin",
-    "Europe/Rome",
-    "Europe/Madrid",
-    "Europe/Zurich",
-    "Europe/Vienna",
-    "Europe/Brussels",
-    "Europe/Prague",
-    "Europe/Warsaw",
-    "Europe/Moscow",
-    "Europe/Istanbul",
-    
-    // Americas
-    "America/New_York",
-    "America/Toronto",
-    "America/Chicago",
-    "America/Denver",
-    "America/Los_Angeles",
-    "America/Anchorage",
-    "America/Mexico_City",
-    "America/Toronto",
-    "America/Bogota",
-    "America/Buenos_Aires",
-    "America/Sao_Paulo",
-    
-    // Asia
-    "Asia/Dubai",
-    "Asia/Bangkok",
-    "Asia/Hong_Kong",
-    "Asia/Shanghai",
-    "Asia/Tokyo",
-    "Asia/Seoul",
-    "Asia/Singapore",
-    "Asia/Kolkata",
-    "Asia/Bangkok",
-    
-    // Australia
-    "Australia/Sydney",
-    "Australia/Melbourne",
-    "Australia/Brisbane",
-    "Australia/Adelaide",
-    "Australia/Perth",
-    
-    // Africa
-    "Africa/Johannesburg",
-    "Africa/Cairo",
-    "Africa/Lagos",
-    
-    // GMT Offsets (for flexibility)
-    "GMT-12",
-    "GMT-11",
-    "GMT-10",
-    "GMT-9",
-    "GMT-8",
-    "GMT-7",
-    "GMT-6",
-    "GMT-5",
-    "GMT-4",
-    "GMT-3",
-    "GMT-2",
-    "GMT-1",
-    "GMT+0",
-    "GMT+1",
-    "GMT+2",
-    "GMT+3",
-    "GMT+4",
-    "GMT+5",
-    "GMT+6",
-    "GMT+7",
-    "GMT+8",
-    "GMT+9",
-    "GMT+10",
-    "GMT+11",
-    "GMT+12",
-    "GMT+13",
-    "GMT+14",
+// POSIX rules for the curated IANA zones offered by the web UI (web_server.h).
+// Applied locally with ezTime setPosix(), so the timezone never depends on the
+// network. ezTime's online lookup (timezoned.rop.nl) times out often and serves
+// stale rules (Mexico_City still with DST, Cairo without). Rules from tzdata
+// 2025; "GMT+N" / "GMT-N" are handled in time_utils.h as UTC+N / UTC-N.
+struct TimezonePosix {
+    const char* name;
+    const char* posix;
 };
 
-static constexpr size_t TIMEZONE_OPTIONS_COUNT = sizeof(TIMEZONE_OPTIONS) / sizeof(TIMEZONE_OPTIONS[0]);
+static constexpr TimezonePosix TIMEZONE_POSIX[] = {
+    {"UTC",                 "UTC0"},
+    // Europe
+    {"Europe/London",       "GMT0BST,M3.5.0/1,M10.5.0"},
+    {"Europe/Paris",        "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Amsterdam",    "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Berlin",       "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Rome",         "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Madrid",       "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Zurich",       "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Vienna",       "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Brussels",     "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Prague",       "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Warsaw",       "CET-1CEST,M3.5.0,M10.5.0/3"},
+    {"Europe/Moscow",       "MSK-3"},
+    {"Europe/Istanbul",     "<+03>-3"},
+    // Americas
+    {"America/New_York",    "EST5EDT,M3.2.0,M11.1.0"},
+    {"America/Toronto",     "EST5EDT,M3.2.0,M11.1.0"},
+    {"America/Chicago",     "CST6CDT,M3.2.0,M11.1.0"},
+    {"America/Denver",      "MST7MDT,M3.2.0,M11.1.0"},
+    {"America/Los_Angeles", "PST8PDT,M3.2.0,M11.1.0"},
+    {"America/Anchorage",   "AKST9AKDT,M3.2.0,M11.1.0"},
+    {"America/Mexico_City", "CST6"},
+    {"America/Bogota",      "<-05>5"},
+    {"America/Buenos_Aires","<-03>3"},
+    {"America/Sao_Paulo",   "<-03>3"},
+    // Asia
+    {"Asia/Dubai",          "<+04>-4"},
+    {"Asia/Bangkok",        "<+07>-7"},
+    {"Asia/Hong_Kong",      "HKT-8"},
+    {"Asia/Shanghai",       "CST-8"},
+    {"Asia/Tokyo",          "JST-9"},
+    {"Asia/Seoul",          "KST-9"},
+    {"Asia/Singapore",      "<+08>-8"},
+    {"Asia/Kolkata",        "IST-5:30"},
+    // Australia
+    {"Australia/Sydney",    "AEST-10AEDT,M10.1.0,M4.1.0/3"},
+    {"Australia/Melbourne", "AEST-10AEDT,M10.1.0,M4.1.0/3"},
+    {"Australia/Brisbane",  "AEST-10"},
+    {"Australia/Adelaide",  "ACST-9:30ACDT,M10.1.0,M4.1.0/3"},
+    {"Australia/Perth",     "AWST-8"},
+    // Africa
+    {"Africa/Johannesburg", "SAST-2"},
+    {"Africa/Cairo",        "EET-2EEST,M4.5.5/0,M10.5.4/24"},
+    {"Africa/Lagos",        "WAT-1"},
+};
+
+static constexpr size_t TIMEZONE_POSIX_COUNT = sizeof(TIMEZONE_POSIX) / sizeof(TIMEZONE_POSIX[0]);
 
 // NTP Server URLs (commonly used public NTP servers)
 static constexpr const char* NTP_SERVER_OPTIONS[] = {

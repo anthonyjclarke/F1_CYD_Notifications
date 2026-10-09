@@ -17,6 +17,14 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ## [Unreleased]
 
+## [0.6.2] Unreleased
+
+### Fixed
+- Timezone still fell back to UTC on some boots in 0.6.1: all three ezTime lookups to `timezoned.rop.nl` timed out even after NTP. That server also serves stale or wrong rules (Mexico_City with DST, Cairo without, `America/Buenos_Aires` not found, `GMT-1` resolved as `Etc/GMT-14`, `GMT+1` as `Etc/GMT+12`). Every zone in the web UI dropdown now maps to a built-in POSIX rule (`TIMEZONE_POSIX` in `timezone_ntp_options.h`, tzdata 2025) applied with `setPosix()` – no network, no delay. `GMT+N` / `GMT-N` mean UTC+N / UTC-N, as labelled. Names typed into the captive portal that aren't in the table still use the online lookup, then UTC. Verified on hardware: "Timezone set: Europe/London (GMT0BST,M3.5.0/1,M10.5.0)".
+
+### Changed
+- `timezone_ntp_options.h`: the unused `TIMEZONE_OPTIONS` name list (with duplicate Toronto/Bangkok entries) replaced by the name → POSIX table.
+
 ## [0.6.1] 10-10-2026
 
 ### Fixed

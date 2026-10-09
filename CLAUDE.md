@@ -69,9 +69,8 @@ F1 race schedule display and Telegram notification system for ESP32-2432S028R. F
 - Before the next release, clear *Tests owed* in docs/WEB_INSTALLER.md (RUNBOOK 5b).
 
 ## Known Quirks
-- ezTime `setLocation()` needs network: a UDP lookup to `timezoned.rop.nl` (2 s timeout incl. DNS). Call it after NTP sync (`applyTimezone()` retries); never before WiFi is warm.
+- Timezones: `applyTimezone()` uses the built-in POSIX table (`TIMEZONE_POSIX`) via `setPosix()`. Never rely on ezTime `setLocation()` – its `timezoned.rop.nl` lookup times out and serves stale rules; it is only the fallback for unknown names. A zone added to the web UI dropdown must be added to the table. `GMT±N` = UTC±N (not Etc/ sign).
 - Touch calibration untested (approximate: {300, 3600, 300, 3600, 7}).
 - Results not cached across reboots (cacheResults() never called).
 - `track_images.h` and `web_about.h` are unused scaffold, moved to `archive/` — not `#include`d anywhere. The web UI "About" section is hand-inlined in `web_server.h`; edit it there, not in the archived `web_about.h`.
 - NTP server is not exposed in the WiFiManager captive portal (`wifi_setup.h` only adds timezone/bot token/chat ID params) — only configurable via web UI after first connect.
-- `timezone_ntp_options.h` lists `America/Toronto` and `Asia/Bangkok` twice each.

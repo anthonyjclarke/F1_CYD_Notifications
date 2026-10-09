@@ -64,7 +64,21 @@ release with the installer on an ElegantOTA project, so case 3 matters.
 - [x] Case 2 – Update on a provisioned board (settings kept) – pass
   10-10-2026, b0:cb:d8:da:ae:8c: live page updated 0.6.0-dev → 0.6.0 with no
   erase; boots `app0`, `/config.json` loaded and the saved WiFi rejoined.
-- [ ] Case 3 – Update from `app1` after an ElegantOTA `/update` (settings kept)
-- [ ] Case 5 – `*-firmware.bin` via the web UI's `/update`
+- [x] Case 3 – Update from `app1` after an ElegantOTA `/update` (settings kept) – pass
+  10-10-2026, b0:cb:d8:da:ae:8c: board on v0.6.0 in `app1`; live page offered
+  Update to v0.6.1 (in a fresh Incognito window – see note); boots `app0`,
+  `/config.json` loaded, saved WiFi rejoined.
+- [x] Case 5 – `*-firmware.bin` via the web UI's `/update` – pass
+  10-10-2026, b0:cb:d8:da:ae:8c: v0.6.0 release
+  `F1_CYD_Notifications-v0.6.0-cyd-firmware.bin` (SHA256 checked) uploaded to
+  ElegantOTA; boots `Running from app1`, settings and WiFi kept.
+
+All owed cases are cleared.
+
+Note: GitHub Pages serves the manifest and parts with `max-age=600`. A browser
+that opened the page before a release can keep the old manifest for up to
+10 minutes, and then shows neither Install nor Update for a board on the old
+version. A hard reload refreshes the page header but not the manifest that
+ESP Web Tools fetches on Connect; an Incognito window (or waiting) does.
 
 Case 1 has no remaining boards (one env), and case 4 does not apply.
