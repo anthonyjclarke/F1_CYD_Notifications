@@ -61,7 +61,9 @@ Smoke-tested only. Run these on the next real work on this project, or before
 the next release, and tick them off with date and board MAC. This is the first
 release with the installer on an ElegantOTA project, so case 3 matters.
 
-- [ ] Case 2 – Update on a provisioned board (settings kept)
+- [x] Case 2 – Update on a provisioned board (settings kept) – pass
+  10-10-2026, b0:cb:d8:da:ae:8c: live page updated 0.6.0-dev → 0.6.0 with no
+  erase; boots `app0`, `/config.json` loaded and the saved WiFi rejoined.
 - [ ] Case 3 – Update from `app1` after an ElegantOTA `/update` (settings kept)
 - [ ] Case 5 – `*-firmware.bin` via the web UI's `/update`
 
