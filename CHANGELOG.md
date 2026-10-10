@@ -17,7 +17,7 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ## [Unreleased]
 
-## [0.7.0] Unreleased
+## [0.7.0] 11-10-2026
 
 ### Added
 - Web UI **Hardware & Diagnostics** panel on the new **System / Diagnostics** tab (replaces Links / Status on the Config tab): firmware version, build time, running partition, Arduino core / IDF; board, chip, flash, device name, MAC, SD card; WiFi SSID and signal, IP, NTP sync state, local time; uptime, last reset reason (e.g. watchdog, brownout, crash), free / minimum heap and largest block, LittleFS usage; current race and which round's results are cached. Served by the extended `GET /api/status`.

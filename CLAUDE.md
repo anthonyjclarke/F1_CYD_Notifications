@@ -1,6 +1,6 @@
 # Project: F1 CYD Notifications
 
-F1 race schedule display and Telegram notification system for ESP32-2432S028R. Fetches 2026 schedule from sportstimes GitHub JSON and post-race results from Jolpica API. Cycles through countdown, event details, and session schedule during race week; post-race screens (winner, standings) for 3 days after GP. Sends Telegram notifications for race week start, key sessions, and results. Current version 0.5.2.
+F1 race schedule display and Telegram notification system for ESP32-2432S028R. Fetches 2026 schedule from sportstimes GitHub JSON and post-race results from Jolpica API. Cycles through countdown, event details, and session schedule during race week; post-race screens (winner, standings) for 3 days after GP. Sends Telegram notifications for race week start, key sessions, and results. Current version 0.7.0.
 
 ## Hardware
 - **MCU**: ESP32-2432S028R (2.8" Cheap Yellow Display)
