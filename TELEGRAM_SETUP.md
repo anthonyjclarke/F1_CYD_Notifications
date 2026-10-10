@@ -75,17 +75,17 @@ Then save.
 
 When Telegram credentials are changed in the Web UI, the firmware sends a confirmation message to the configured chat. Sends run on the device's main loop, so the save banner shows "Sending…" and then whether that confirmation was sent.
 
-The Config tab also includes:
-- `Test Telegram` - sends a fresh verification message using the saved token/chat ID.
-- `Resend Last` - resends the last Telegram message that was successfully sent and saved by the device.
+The Settings tab also includes:
+- `Send test` - sends a fresh verification message using the saved token/chat ID.
+- `Resend last` - resends the last Telegram message that was successfully sent and saved by the device.
 
-### Using `Test Telegram`
+### Using `Send test`
 
 1. Open `http://<device-ip>/`.
-2. Select the Config tab.
+2. Select the Settings tab.
 3. Confirm Bot Token and Chat ID are populated.
-4. If either value changed, click `Save Configuration` first.
-5. Click `Test Telegram`.
+4. If either value changed, click `Save settings` first.
+5. Click `Send test`.
 
 Expected Telegram message:
 
@@ -97,11 +97,11 @@ Telegram credentials are configured and this chat can receive messages.
 
 If the Web UI reports `Telegram test failed`, check the troubleshooting section below.
 
-### Using `Resend Last`
+### Using `Resend last`
 
-Click `Resend Last` from the Config tab to resend the last Telegram message that the ESP32 successfully delivered. This message is saved to LittleFS at `/telegram_last.txt`, so it survives reboot.
+Click `Resend last` from the Settings tab to resend the last Telegram message that the ESP32 successfully delivered. This message is saved to LittleFS at `/telegram_last.txt`, so it survives reboot.
 
-`Resend Last` is useful after replacing credentials or confirming the bot still works, but it cannot recreate an event notification that never sent successfully.
+`Resend last` is useful after replacing credentials or confirming the bot still works, but it cannot recreate an event notification that never sent successfully.
 
 Stored in `/config.json` as:
 - `bot`
@@ -112,7 +112,7 @@ Stored in `/config.json` as:
 
 From firmware logic:
 - `telegramEnabled` is set true when both bot token and chat ID are non-empty.
-- The Web UI confirmation or `Test Telegram` button verifies that Telegram accepted the send.
+- The Web UI confirmation or `Send test` button verifies that Telegram accepted the send.
 
 So both must be configured:
 - Token
@@ -140,11 +140,11 @@ Deduplication:
 
 ## 8. Known Behavior / Current Limitation
 
-The device stores the last successfully sent Telegram message in LittleFS so `Resend Last` can survive a reboot.
+The device stores the last successfully sent Telegram message in LittleFS so `Resend last` can survive a reboot.
 
 Limits:
 - If no Telegram message has ever been sent successfully, there is nothing to resend.
-- `Resend Last` does not reconstruct a missed event notification; it only resends the saved last-successful message.
+- `Resend last` does not reconstruct a missed event notification; it only resends the saved last-successful message.
 
 ## 9. Group Chat Setup (Optional)
 
@@ -176,9 +176,9 @@ Check serial logs for `[Telegram]` lines and verify:
 
 ### Notifications not appearing after config change
 
-- Use `Test Telegram` in the Web UI.
+- Use `Send test` in the Web UI.
 - If the test fails, check token/chat ID and confirm you have sent `/start` to the bot.
-- If the test succeeds but an event notification was missed, use `Resend Last` only if the previous message had already been sent successfully.
+- If the test succeeds but an event notification was missed, use `Resend last` only if the previous message had already been sent successfully.
 
 ## 11. Security Notes
 

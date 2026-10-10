@@ -250,11 +250,19 @@ A light, single-page UI with three tabs. The status bar under the header shows c
 - **Settings** – timezone and NTP server, display brightness (0 = auto), Telegram bot token and chat ID with test / resend.
 - **System / Diagnostics** – firmware, network, hardware, system and F1-data panels, plus OTA update, TFT screenshot and serial debug level.
 
-The open tab is kept in the URL (`/#sch`, `/#cfg`, `/#diag`). The screenshots below are from the earlier dark UI.
+The open tab is kept in the URL (`/#sch`, `/#cfg`, `/#diag`). The status bar can be dismissed with ×; it reappears by itself if the device is unreachable or NTP isn't synced.
 
-![Web UI Config](./images/WebUI_Config.jpg)
+### Schedule
 
 ![Web UI Schedule](./images/WebUI_Schedule.jpg)
+
+### Settings
+
+![Web UI Settings](./images/WebUI_Settings.jpg)
+
+### System / Diagnostics
+
+![Web UI System / Diagnostics](./images/WebUI_Diagnostics.jpg)
 
 ## Web UI and API
 
@@ -331,7 +339,7 @@ LittleFS files:
 - `/config.json` user settings + notification state
 - `/races.json` cached schedule payload
 - `/lasttime.json` last-known-good UTC epoch (NTP fallback for failed-sync boots)
-- `/telegram_last.txt` last successfully sent Telegram message, used by `Resend Last`
+- `/telegram_last.txt` last successfully sent Telegram message, used by `Resend last`
 - `/results.json` reserved helper cache (not active in current flow)
 
 Config keys (`/config.json`):

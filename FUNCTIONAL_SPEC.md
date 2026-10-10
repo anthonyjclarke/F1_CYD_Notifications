@@ -100,7 +100,7 @@ Deduplication/state:
 - No notifications are sent until NTP has synced (`ntpHasSynced()`).
 - Each send is one HTTPS POST with `parse_mode=Markdown`; an HTTP 400 is resent once as plain text.
 - The last successfully sent Telegram message is persisted separately at `/telegram_last.txt`.
-- `Resend Last` resends only that saved successful message; it does not reconstruct missed event notifications.
+- `Resend last` resends only that saved successful message; it does not reconstruct missed event notifications.
 
 ### 2.6 Post-Race Data Polling
 - Polling starts at GP + 3 hours.
