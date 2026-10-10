@@ -43,6 +43,7 @@ bool loadConfig(AppConfig& cfg) {
     cfg.lastNotifiedRound  = doc["notRound"] | 0;
     cfg.notificationBits   = doc["notBits"]  | 0;
     cfg.notifiedGpUtc      = (time_t)(doc["notGp"] | 0L);  // absent in configs from 0.6.2 and earlier
+    cfg.resultsNotifiedGpUtc = (time_t)(doc["resGp"] | -1L); // -1: upgraded in checkNotifications()
     cfg.telegramEnabled    = strlen(cfg.botToken) > 0 && strlen(cfg.chatId) > 0;
 
     DBG_INFO("[Config] Loaded: TZ=%s, Telegram=%s, Brightness=%d",
@@ -61,6 +62,7 @@ bool saveConfig(const AppConfig& cfg) {
     doc["notRound"] = cfg.lastNotifiedRound;
     doc["notBits"]  = cfg.notificationBits;
     doc["notGp"]    = (long)cfg.notifiedGpUtc;
+    doc["resGp"]    = (long)cfg.resultsNotifiedGpUtc;
     doc["tgOn"]     = cfg.telegramEnabled;
 
     File f = LittleFS.open(CONFIG_FILE, "w");

@@ -36,7 +36,18 @@ static StandingEntry constructorStandings[MAX_STANDINGS];
 static uint8_t podiumCount = 0;
 static uint8_t driverStandingsCount = 0;
 static uint8_t constructorStandingsCount = 0;
-static bool resultsAvailable = false;
+static uint8_t resultsRound = 0;        // Round the podium/standings were fetched for (0 = none)
+
+// True if the podium in memory belongs to this race. A bare "results available" flag
+// stayed true after the next race took over, so that race's results were never polled.
+bool hasResultsFor(const RaceData& race) {
+    return resultsRound != 0 && resultsRound == race.round && podiumCount > 0;
+}
+
+// GP start + nominal race duration: the point a GP counts as run
+time_t gpFinishedUtc(time_t gpUtc) {
+    return gpUtc + getSessionDurationSeconds(SESSION_GP);
+}
 
 // --- Helpers ---
 
@@ -135,11 +146,14 @@ bool parseSchedule(const String& json) {
         DBG_WARN("[F1] Season appears over, defaulting to last race");
     }
 
-    // If the found race is still within its post-race window but the NEXT race is already
-    // within the countdown window, advance nextIdx so the next race becomes current and
-    // the post-race race becomes prev. This enables the combined race-week + results
+    // If the found race's GP has finished but the NEXT race is already within the
+    // countdown window, advance nextIdx so the next race becomes current and the
+    // post-race race becomes prev. This enables the combined race-week + results
     // rotation instead of the pure post-race rotation during the overlap period.
-    if (nextIdx + 1 < (int)racesArr.size()) {
+    // Never before the GP has run: on back-to-back weekends the next FP1 is 7 days
+    // out from the Friday, and advancing then lost this race's quali/race reminders.
+    time_t foundGp = parseISO8601(racesArr[nextIdx]["sessions"]["gp"]);
+    if (now >= gpFinishedUtc(foundGp) && nextIdx + 1 < (int)racesArr.size()) {
         JsonObjectConst nextSessions = racesArr[nextIdx + 1]["sessions"].as<JsonObjectConst>();
         const char* nextFp1 = nextSessions["fp1"] | nextSessions["gp"] | (const char*)nullptr;
         if (nextFp1) {
@@ -450,22 +464,6 @@ bool fetchConstructorStandings() {
              constructorStandingsCount > 0 ? constructorStandings[0].name : "?",
              constructorStandingsCount > 0 ? constructorStandings[0].points : 0);
     return constructorStandingsCount > 0;
-}
-
-// Fetch all post-race data
-bool fetchPostRaceData(uint8_t round) {
-    DBG_INFO("[F1] Fetching all post-race data for R%d", round);
-    bool resultsOk = fetchRaceResults(round);
-    bool driversOk = fetchDriverStandings();
-    bool constructorsOk = fetchConstructorStandings();
-    bool ok = resultsOk && driversOk && constructorsOk;
-    resultsAvailable = ok;
-    DBG_INFO("[F1] Post-race data fetch: podium=%s, drivers=%s, constructors=%s",
-             resultsOk ? "ok" : "fail",
-             driversOk ? "ok" : "fail",
-             constructorsOk ? "ok" : "fail");
-    DBG_INFO("[F1] Post-race data fetch: %s", ok ? "complete" : "PARTIAL/FAILED (will retry)");
-    return ok;
 }
 
 // Get the current race data

@@ -25,12 +25,18 @@ Version scheme: `MAJOR.MINOR.PATCH`
 - A notification bit is saved to `/config.json` straight after its message is sent, not at the end of the check, so a reboot in between can't re-send it.
 - The "NTP synced" flag was never set when ezTime synced in the background after a boot that used the saved fallback time (so the 15-minute time saves never ran), and `resyncNTP()` set it on the fallback time alone. It now follows ezTime's own last-sync time.
 - Telegram messages showed literal `*` characters; they are now sent with `parse_mode=Markdown`. A message Telegram rejects as Markdown (HTTP 400, nothing delivered) is resent as plain text.
+- Once one race's results had been fetched, `resultsAvailable` stayed true until reboot: the next race's results were never polled, its results notification was pre-marked as sent, and its post-race screen showed the previous podium. Results are now tied to the round they were fetched for (`hasResultsFor()`), and invalidated while a fetch is in progress.
+- The results notification is now tracked by the GP time of the race it was for (`resGp` in `/config.json`) instead of a bit in the current round's bitmask, which in the combined window belonged to the next race and could suppress that race's results. Configs from 0.6.2 and earlier are converted from the old bit, so a result already sent isn't sent again.
+- On back-to-back weekends, a schedule refresh from the Friday of race N found race N+1's FP1 exactly 7 days away and made it current, so race N's qualifying and race reminders were lost and the countdown showed the wrong race. `parseSchedule()` now advances only once race N's GP has finished (start + 2 h), and the cached schedule is re-parsed at that moment so the combined rotation starts straight away.
+- After a boot on the saved fallback clock, the schedule is re-parsed once NTP syncs, so prev/current/next are picked against real time.
 
 ### Changed
 - Removed the hardcoded `upload_port = /dev/cu.usbserial-240` from `platformio.ini`; PlatformIO auto-detects the port (override with `--upload-port`).
 - Removed Universal-Arduino-Telegram-Bot from `lib_deps`; `telegram_handler.h` calls the Bot API directly.
 - Web UI **Test Telegram**, **Resend Last** and the confirmation after saving new credentials are queued and sent from `loop()` instead of the web server task, which they could block for 8 s while racing an automatic notification on the same client. The endpoints return `202`; the page polls `GET /api/telegram/status` (`pending`, `lastResult`) for the outcome.
 - `/config.json` is no longer rewritten every minute; it is saved only when notification state changes.
+- `POST /api/config` no longer runs `initTime()` (up to 15 s waiting for NTP) inside the web server task on every save. A changed timezone or NTP server is applied by `loop()` with `applyTimezone()` (no network for zones in the built-in table), and session times are refreshed for all three loaded races, not just the current one.
+- Removed the unused duplicate `fetchPostRaceData()`.
 
 ## [0.6.2] 10-10-2026
 

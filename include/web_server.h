@@ -563,6 +563,21 @@ setInterval(updateCountdowns, 1000);
 </html>
 )rawliteral";
 
+// Timezone / NTP server changed by POST /api/config; applied by loop() so the
+// handler never blocks the AsyncTCP task (initTime() could wait 15 s for NTP).
+static volatile bool timeConfigChanged = false;
+
+void applyTimeConfigChange() {
+    if (!timeConfigChanged || !_webConfigPtr) return;
+    timeConfigChanged = false;
+    setServer(_webConfigPtr->ntpServer);
+    applyTimezone(_webConfigPtr->timezone);
+    for (uint8_t i = 0; i < MAX_RACES; i++) {
+        updateSessionTimesForRace(races[i]);
+    }
+    requestRedraw();
+}
+
 // Queue a Telegram request for loop() and reply 202, or 400 with reason / 409 if busy
 static void sendTelegramQueueResponse(AsyncWebServerRequest* request, bool allowed,
                                       TelegramRequest req, const char* notAllowedMsg) {
@@ -618,6 +633,10 @@ void setupWebServer(AppConfig& cfg) {
     server.on("/api/config", HTTP_POST, [](AsyncWebServerRequest* request) {
         if (!_webConfigPtr) { request->send(500); return; }
 
+        char oldTimezone[sizeof(_webConfigPtr->timezone)];
+        char oldNtpServer[sizeof(_webConfigPtr->ntpServer)];
+        strlcpy(oldTimezone, _webConfigPtr->timezone, sizeof(oldTimezone));
+        strlcpy(oldNtpServer, _webConfigPtr->ntpServer, sizeof(oldNtpServer));
         char oldBotToken[sizeof(_webConfigPtr->botToken)];
         char oldChatId[sizeof(_webConfigPtr->chatId)];
         strlcpy(oldBotToken, _webConfigPtr->botToken, sizeof(oldBotToken));
@@ -647,14 +666,11 @@ void setupWebServer(AppConfig& cfg) {
         // Apply brightness immediately
         updateBrightness(_webConfigPtr->brightness);
 
-        // Re-init timezone if changed
-        initTime(_webConfigPtr->timezone, _webConfigPtr->ntpServer);
-
-        // Update session times for current race after timezone change
-        updateSessionTimesForRace(races[currentRaceIdx]);
-        
-        // Force display redraw to reflect new times
-        requestRedraw();
+        // Timezone / NTP server: applied by loop(), which also redraws with the new times
+        if (strcmp(oldTimezone, _webConfigPtr->timezone) != 0 ||
+            strcmp(oldNtpServer, _webConfigPtr->ntpServer) != 0) {
+            timeConfigChanged = true;
+        }
 
         saveConfig(*_webConfigPtr);
         // Confirmation message is sent from loop(); the page polls /api/telegram/status
@@ -734,7 +750,7 @@ void setupWebServer(AppConfig& cfg) {
         doc["round"]            = race.round;
         doc["isSprint"]         = race.isSprint;
         doc["postRace"]         = inPostRace;
-        doc["resultsAvailable"] = resultsAvailable;
+        doc["resultsAvailable"] = hasResultsFor(race);
 
         // Current race sessions (always included — useful even in post-race for reference)
         JsonArray sessions = doc["sessions"].to<JsonArray>();
@@ -748,7 +764,7 @@ void setupWebServer(AppConfig& cfg) {
         }
 
         // Podium results (if available)
-        if (resultsAvailable && podiumCount > 0) {
+        if (hasResultsFor(race)) {
             JsonArray pod = doc["podium"].to<JsonArray>();
             for (uint8_t i = 0; i < podiumCount; i++) {
                 JsonObject p = pod.add<JsonObject>();

@@ -222,15 +222,27 @@ void checkNotifications(RaceData& race, AppConfig& cfg) {
     // them, so a schedule parsed against a stale clock can't step back a round, clear
     // the bits and re-send. A race older than the notified one is ignored.
     if (race.gpTimeUtc < cfg.notifiedGpUtc) return;
+
+    RaceData& prev = getPrevRace();
+    time_t prevGp = (prev.round != race.round) ? prev.gpTimeUtc : 0;
+
+    // Config saved by <= 0.6.2 tracked results with NOTIFY_RESULT in the current round's
+    // bits (set early in the combined window when R(n) results were already sent).
+    // Convert once, before any reset below, so a result already sent isn't sent again.
+    if (cfg.resultsNotifiedGpUtc < 0) {
+        bool resultSent = cfg.notificationBits & NOTIFY_RESULT;
+        if (now >= race.gpTimeUtc) cfg.resultsNotifiedGpUtc = resultSent ? race.gpTimeUtc : prevGp;
+        else                       cfg.resultsNotifiedGpUtc = resultSent ? prevGp : 0;
+        saveConfig(cfg);
+    }
+
     if (race.gpTimeUtc > cfg.notifiedGpUtc) {
         // Config saved by <= 0.6.2 has no notGp: keep its bits if they are for this round.
         bool upgradedSameRound = (cfg.notifiedGpUtc == 0 && cfg.lastNotifiedRound == race.round);
         if (!upgradedSameRound) {
-            // During the overlap window (post-race R(n) + countdown to R(n+1)), R(n) results
-            // are still in memory - keep NOTIFY_RESULT so they aren't re-sent for R(n+1).
             DBG_INFO("[Telegram] New round (%d→%d), resetting notification bits",
                      cfg.lastNotifiedRound, race.round);
-            cfg.notificationBits = (resultsAvailable && podiumCount > 0) ? NOTIFY_RESULT : 0;
+            cfg.notificationBits = 0;
         }
         cfg.notifiedGpUtc = race.gpTimeUtc;
         cfg.lastNotifiedRound = race.round;
@@ -271,16 +283,16 @@ void checkNotifications(RaceData& race, AppConfig& cfg) {
         }
     }
 
-    // Results notification - after GP.
-    // During the combined overlap window, getCurrentRace() is R(n+1) but podium data
-    // belongs to R(n). Use getPrevRace() when the current race GP hasn't happened yet.
-    if (resultsAvailable && podiumCount > 0 &&
-        !(cfg.notificationBits & NOTIFY_RESULT)) {
-        RaceData& raceForResults = (now >= race.gpTimeUtc) ? race : getPrevRace();
+    // Results notification - once per race, tracked by GP time rather than a bit in the
+    // current round's bitmask: in the combined window R(n) results arrive after R(n+1)
+    // is already current, so the podium may belong to the current or the previous race.
+    RaceData* resultsRace = hasResultsFor(race) ? &race : (hasResultsFor(prev) ? &prev : nullptr);
+    if (resultsRace && resultsRace->gpTimeUtc > cfg.resultsNotifiedGpUtc) {
         DBG_INFO("[Telegram] Sending race results notification for R%d (%s)",
-                 raceForResults.round, raceForResults.name);
-        if (sendTelegramMessage(cfg, formatResultsMessage(raceForResults, podium, podiumCount))) {
-            markNotified(cfg, NOTIFY_RESULT);
+                 resultsRace->round, resultsRace->name);
+        if (sendTelegramMessage(cfg, formatResultsMessage(*resultsRace, podium, podiumCount))) {
+            cfg.resultsNotifiedGpUtc = resultsRace->gpTimeUtc;
+            saveConfig(cfg);
         }
     }
 }

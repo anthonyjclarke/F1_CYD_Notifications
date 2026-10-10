@@ -129,7 +129,7 @@ void advanceDisplayState(DisplayState phase) {
         case STATE_RACE_WEEK_COUNTDOWN:
         case STATE_RACE_WEEK_EVENT_DETAILS:
         case STATE_RACE_WEEK_SCHEDULE:
-            if (resultsAvailable) {
+            if (hasResultsFor(getPrevRace())) {
                 // Combined rotation: countdown → event details → schedule → winner → drivers → constructors → countdown
                 switch (currentDisplayState) {
                     case STATE_RACE_WEEK_COUNTDOWN:     currentDisplayState = STATE_RACE_WEEK_EVENT_DETAILS; break;
@@ -242,7 +242,7 @@ void updateDisplay(RaceData& race) {
                currentDisplayState != STATE_RACE_WEEK_EVENT_DETAILS &&
                currentDisplayState != STATE_RACE_WEEK_SCHEDULE &&
                // Don't reset if showing previous race results in combined mode
-               !(resultsAvailable && (
+               !(hasResultsFor(getPrevRace()) && (
                    currentDisplayState == STATE_POST_RACE_WINNER ||
                    currentDisplayState == STATE_POST_RACE_DRIVERS ||
                    currentDisplayState == STATE_POST_RACE_CONSTRUCTORS))) {

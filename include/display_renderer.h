@@ -380,7 +380,7 @@ void drawRaceWinner(RaceData& race) {
     tft.setTextColor(COLOR_SESSION_TEXT);
     tft.drawString(race.name, SCREEN_WIDTH / 2,38);
 
-    if (podiumCount == 0) {
+    if (!hasResultsFor(race)) {
         tft.setTextColor(COLOR_GRID);
         tft.drawString("Results pending...", SCREEN_WIDTH / 2, 120);
         return;

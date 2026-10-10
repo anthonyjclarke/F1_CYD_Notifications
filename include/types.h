@@ -30,7 +30,7 @@ enum DisplayState : uint8_t {
 #define NOTIFY_RACE_WEEK     (1 << 0)
 #define NOTIFY_PRE_QUALI     (1 << 1)
 #define NOTIFY_PRE_RACE      (1 << 2)
-#define NOTIFY_RESULT        (1 << 3)
+#define NOTIFY_RESULT        (1 << 3)   // Legacy (<= 0.6.2): only read to upgrade old configs
 #define NOTIFY_PRE_SPRINT    (1 << 4)
 #define NOTIFY_PRE_SPRINT_Q  (1 << 5)
 
@@ -79,6 +79,7 @@ struct AppConfig {
     uint8_t lastNotifiedRound;
     uint8_t notificationBits;     // Bitmask of sent notifications for current round
     time_t notifiedGpUtc;         // GP time of the race notificationBits belong to
+    time_t resultsNotifiedGpUtc;  // GP time of the last race whose results were sent (-1 = unknown, old config)
     bool telegramEnabled;
 };
 
@@ -92,5 +93,6 @@ inline void setDefaultConfig(AppConfig& cfg) {
     cfg.lastNotifiedRound = 0;
     cfg.notificationBits = 0;
     cfg.notifiedGpUtc = 0;
+    cfg.resultsNotifiedGpUtc = 0;
     cfg.telegramEnabled = false;
 }

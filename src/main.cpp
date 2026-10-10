@@ -36,6 +36,7 @@ unsigned long lastBrightnessChk   = 0;
 unsigned long lastWiFiCheck       = 0;
 unsigned long lastTimeSave        = 0;
 bool resultsPollActive            = false;
+bool bootUsedFallbackTime         = false;  // NTP failed in setup(); re-parse once it syncs
 
 // --- Touch ---
 bool touchEnabled = false;
@@ -77,6 +78,7 @@ void setLED(bool r, bool g, bool b) {
 
 // --- Fetch post-race data with per-step TFT status messages ---
 bool fetchPostRaceDataWithStatus(uint8_t round) {
+    resultsRound = 0;  // podium/standings are overwritten piecemeal - invalid until all succeed
     drawStatusMessage("Fetching race result...");
     bool resultsOk = fetchRaceResults(round);
 
@@ -87,7 +89,7 @@ bool fetchPostRaceDataWithStatus(uint8_t round) {
     bool constructorsOk = fetchConstructorStandings();
 
     bool ok = resultsOk && driversOk && constructorsOk;
-    resultsAvailable = ok;
+    if (ok) resultsRound = round;
     DBG_INFO("[Main] Post-race fetch: podium=%s drivers=%s constructors=%s",
              resultsOk ? "ok" : "fail",
              driversOk ? "ok" : "fail",
@@ -108,7 +110,7 @@ void checkResultsPolling() {
     // Start polling after GP + 3 hours
     if (secsAfterGP >= RESULTS_POLL_AFTER_SEC &&
         secsAfterGP < RESULTS_GIVE_UP_SEC &&
-        !resultsAvailable) {
+        !hasResultsFor(raceForResults)) {
         if (!resultsPollActive) {
             DBG_INFO("[Main] Results polling activated for R%d (%.1fh after GP)",
                      raceForResults.round, secsAfterGP / 3600.0f);
@@ -147,12 +149,30 @@ void checkWiFiReconnect() {
     wifiWasConnected = connected;
 }
 
-// --- Post-Race Expiry ---
-// When the post-race window ends, immediately refresh the schedule so races[1] advances
-// to the next upcoming race and the race-week countdown activates without waiting 24h.
+// --- Post-Race Schedule Updates ---
+// GP finished: re-parse the cached schedule so a next race already inside the countdown
+// window becomes current now (combined rotation) instead of at the next 24h refresh -
+// parseSchedule() only advances once the GP has run.
+// Post-race window ended: refresh the schedule so races[1] advances to the next upcoming
+// race and the race-week countdown activates without waiting 24h.
 void checkPostRaceExpiry() {
     static bool wasInPostRace = false;
+    static time_t reparsedForGp = 0;
     RaceData& race = getCurrentRace();
+
+    if (race.gpTimeUtc > 0 && nowUTC() >= gpFinishedUtc(race.gpTimeUtc) &&
+        reparsedForGp != race.gpTimeUtc) {
+        reparsedForGp = race.gpTimeUtc;
+        uint8_t roundBefore = race.round;
+        if (loadScheduleFromCache() && getCurrentRace().round != roundBefore) {
+            DBG_INFO("[Main] GP finished — R%d now current (combined rotation)",
+                     getCurrentRace().round);
+            wasInPostRace = false;  // R(n) post-race now shows inside the combined rotation
+            requestRedraw();
+            return;
+        }
+    }
+
     long secsAfterGP = (long)(nowUTC() - race.gpTimeUtc);
     int daysAfterGP = (int)(secsAfterGP / 86400);
     bool inPostRace = (secsAfterGP >= 0 && daysAfterGP < POST_RACE_DAYS);
@@ -165,6 +185,18 @@ void checkPostRaceExpiry() {
         }
     }
     wasInPostRace = inPostRace;
+}
+
+// --- NTP Recovery ---
+// After a boot on the saved fallback clock (or none), the schedule was parsed against
+// that time. Re-pick prev/current/next once real NTP time arrives.
+void checkNtpRecovery() {
+    if (!bootUsedFallbackTime || !ntpHasSynced()) return;
+    bootUsedFallbackTime = false;
+    DBG_INFO("[Main] NTP synced after fallback boot — re-parsing schedule");
+    if (loadScheduleFromCache()) {
+        requestRedraw();
+    }
 }
 
 // --- Schedule Refresh ---
@@ -236,6 +268,7 @@ void setup() {
 #endif
     if (!initTime(appConfig.timezone, appConfig.ntpServer)) {
         DBG_WARN("[Main] Time sync failed - continuing without NTP");
+        bootUsedFallbackTime = true;
     }
 
     // 9. Fetch F1 schedule
@@ -340,8 +373,14 @@ void loop() {
     // Post-race results polling
     checkResultsPolling();
 
-    // Post-race expiry — triggers immediate schedule refresh when window ends
+    // GP finished / post-race expiry — re-pick the current race straight away
     checkPostRaceExpiry();
+
+    // Re-parse the schedule once NTP syncs after a fallback-clock boot
+    checkNtpRecovery();
+
+    // Timezone / NTP server changed in the web UI
+    applyTimeConfigChange();
 
     // Schedule refresh - every 24 hours
     checkScheduleRefresh();

@@ -37,7 +37,8 @@ Schedule parse behavior:
 - Finds current race anchor as first race where `gp + POST_RACE_DAYS > now`.
 - Stores 3 races in RAM: previous/current-next/next-after.
 - Builds compact upcoming race list (up to 25 rounds) for web season table.
-- If the next race is already within the countdown window while the previous race is still in its post-race window, advances the current anchor to support combined race-week + previous-results rotation.
+- If the current race's GP has finished (start + 2 h) and the next race is already within the countdown window, advances the current anchor to support combined race-week + previous-results rotation. The cached schedule is re-parsed when the GP finishes so this happens straight away.
+- After a boot on the saved fallback clock, the schedule is re-parsed once NTP syncs.
 
 Session modeling:
 - Supports FP1/FP2/FP3, Sprint Qualifying, Sprint, Qualifying, Race.
@@ -95,6 +96,7 @@ Credential update behavior:
 Deduplication/state:
 - Per-race bitmask (`notificationBits`) prevents duplicates; each bit is saved to `/config.json` straight after its message is sent.
 - Bitmask belongs to the race whose GP time is `notifiedGpUtc` (`notGp`); it resets only when a later race becomes current.
+- The results message is tracked separately by the GP time of the race it was for (`resGp`), so previous-race results sent in the combined window don't suppress the current race's.
 - No notifications are sent until NTP has synced (`ntpHasSynced()`).
 - Each send is one HTTPS POST with `parse_mode=Markdown`; an HTTP 400 is resent once as plain text.
 - The last successfully sent Telegram message is persisted separately at `/telegram_last.txt`.
@@ -122,7 +124,7 @@ Endpoints:
 - `GET /` web UI.
 - `GET /logo.raw` RGB565 F1 logo bytes.
 - `GET /api/config` current config JSON.
-- `POST /api/config` update timezone, NTP, Telegram credentials, brightness; saves config; reapplies time/brightness; queues a Telegram confirmation message when credentials change (`telegramTestQueued`).
+- `POST /api/config` update timezone, NTP, Telegram credentials, brightness; saves config; applies brightness; a changed timezone/NTP server is applied by the main loop (no NTP wait); queues a Telegram confirmation message when credentials change (`telegramTestQueued`).
 - `GET /api/telegram/status` Telegram configured, saved last message, `pending` and `lastResult` (-1 none, 0 failed, 1 sent) of the queued web request.
 - `POST /api/telegram/test` queue a Telegram verification message (`202`).
 - `POST /api/telegram/resend` queue a resend of the last successfully sent Telegram message (`202`).
