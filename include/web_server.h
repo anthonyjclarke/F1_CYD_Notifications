@@ -57,7 +57,9 @@ label{display:block;font-size:12px;color:var(--muted)}
 input,select{display:block;width:100%;border:1px solid var(--edge);border-radius:6px;padding:8px 10px;background:#fff;color:var(--ink);margin:4px 0 0}
 input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--red);outline-offset:1px}
 input[type=range]{padding:0;border:0;background:none;accent-color:var(--red)}
-.badge{border-left:4px solid #6f8f7a;border-radius:6px;background:#eaf1e9;padding:12px 16px;margin:16px 0;font-size:14px}
+.badge{position:relative;border-left:4px solid #6f8f7a;border-radius:6px;background:#eaf1e9;padding:12px 44px 12px 16px;margin:16px 0;font-size:14px}
+.badge-close{position:absolute;top:6px;right:6px;background:none;border:0;color:var(--muted);font-size:20px;line-height:1;padding:4px 9px}
+.badge-close:hover{color:var(--ink);filter:none}
 .badge.busy{border-color:#b28432;background:#fff6dc}
 .badge.warning{border-color:#a45846;background:#fff0e9}
 .badge small{display:block;margin-top:4px;color:var(--muted);font-size:12px}
@@ -139,7 +141,7 @@ footer a{color:var(--muted)}
   </nav>
 </header>
 
-<div id="status" class="badge busy" role="status"><span id="statusMain">Connecting&hellip;</span><small id="statusSub">&nbsp;</small></div>
+<div id="status" class="badge busy" role="status"><button type="button" class="badge-close" aria-label="Dismiss status" title="Dismiss" onclick="dismissStatus()">&times;</button><span id="statusMain">Connecting&hellip;</span><small id="statusSub">&nbsp;</small></div>
 <div class="msg" id="msg" role="alert"></div>
 
 <!-- Schedule Tab -->
@@ -305,6 +307,16 @@ function showTab(t) {
   history.replaceState(null, '', '#' + t);
 }
 
+// Status bar can be dismissed while healthy; remembered per browser
+let statusDismissed = false;
+try { statusDismissed = localStorage.getItem('f1StatusHidden') === '1'; } catch(e) {}
+$('status').hidden = statusDismissed;
+function dismissStatus() {
+  statusDismissed = true;
+  $('status').hidden = true;
+  try { localStorage.setItem('f1StatusHidden', '1'); } catch(e) {}
+}
+
 function refreshAll() {
   loadStatus();
   loadSchedule();
@@ -382,10 +394,12 @@ async function loadStatus() {
     $('dResults').textContent = s.resultsRound ? 'R' + s.resultsRound : 'None';
 
     $('status').className = s.ntpSynced ? 'badge' : 'badge busy';
+    $('status').hidden = statusDismissed && s.ntpSynced;   // problems always show
     $('statusMain').textContent = '✓ Connected · ' + s.device + ' · ' + s.ip + ' · v' + s.fw;
     $('statusSub').textContent  = 'NTP: ' + ntpText + ' · Device time ' + s.localTime;
   } catch(e) {
     $('status').className = 'badge warning';
+    $('status').hidden = false;
     $('statusMain').textContent = 'Connection lost';
     $('statusSub').textContent  = 'Retrying every 10 seconds.';
   }

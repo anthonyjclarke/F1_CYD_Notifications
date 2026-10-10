@@ -37,6 +37,7 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ### Changed
 - Web UI redesigned in a light style (paper background, white panels, F1-red accents). Three tabs: **Schedule**, **Settings** and **System / Diagnostics** (diagnostics, OTA, screenshot and debug level moved off the Config tab). A status bar shows connection, firmware and NTP state; the Schedule tab adds cards for the next session countdown, Grand Prix time and races left. The open tab is kept in the URL hash. No API changes.
+- The web UI status bar can be dismissed (×); the choice is remembered in the browser, and the bar comes back by itself if the device is unreachable or NTP isn't synced.
 - Removed the hardcoded `upload_port = /dev/cu.usbserial-240` from `platformio.ini`; PlatformIO auto-detects the port (override with `--upload-port`).
 - Removed Universal-Arduino-Telegram-Bot from `lib_deps`; `telegram_handler.h` calls the Bot API directly.
 - Web UI **Test Telegram**, **Resend Last** and the confirmation after saving new credentials are queued and sent from `loop()` instead of the web server task, which they could block for 8 s while racing an automatic notification on the same client. The endpoints return `202`; the page polls `GET /api/telegram/status` (`pending`, `lastResult`) for the outcome.
