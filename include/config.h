@@ -12,6 +12,7 @@
 #define FIRMWARE_VERSION    "0.7.0-dev"
 #define PROJECT_NAME        "F1_CYD_Notifications"
 #define PROJECT_REPO_URL    "https://github.com/anthonyjclarke/F1_CYD_Notifications"
+#define BOARD_NAME          "ESP32-2432S028R (CYD 2.8\u2033)"   // web UI diagnostics
 
 // --- CYD Pin Mapping (v1/v2) ---
 // TFT display pins defined in platformio.ini build_flags

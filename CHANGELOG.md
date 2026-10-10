@@ -19,7 +19,12 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ## [0.7.0] Unreleased
 
+### Added
+- Web UI **Hardware & Diagnostics** panel on the new **System / Diagnostics** tab (replaces Links / Status on the Config tab): firmware version, build time, running partition, Arduino core / IDF; board, chip, flash, device name, MAC, SD card; WiFi SSID and signal, IP, NTP sync state, local time; uptime, last reset reason (e.g. watchdog, brownout, crash), free / minimum heap and largest block, LittleFS usage; current race and which round's results are cached. Served by the extended `GET /api/status`.
+
 ### Fixed
+- Web UI showed brightness 128 when it was set to 0 (auto), so saving any other setting switched auto brightness off. It now shows "Auto" and keeps 0.
+- Web UI messages stopped appearing after the first one had timed out (an inline `display:none` was left on the message box). Messages now also stay in view while scrolling.
 - Some Telegram notifications arrived twice. Universal-Arduino-Telegram-Bot 1.3.0 re-POSTs a message for up to 8 s until it reads `"ok":true`, but stops reading the reply after the first chunk (1.5 s limit), so a slow reply from Telegram was taken as a failure and the already-delivered message was sent again. If every attempt was misread, the next minute's check sent it once more. Messages are now sent with one `HTTPClient` POST per attempt (`TELEGRAM_TIMEOUT_MS` 10 s), counted as sent on HTTP 200.
 - Notification bits were cleared on any change of round, including a step back to an earlier round from a schedule parsed against a stale fallback clock, so the race-week message could be re-sent once real time returned. Bits are now tied to the race's GP time (`notGp` in `/config.json`) and reset only for a later race; notifications wait until NTP has synced. Configs from 0.6.2 and earlier keep their bits for the current round.
 - A notification bit is saved to `/config.json` straight after its message is sent, not at the end of the check, so a reboot in between can't re-send it.
@@ -31,6 +36,7 @@ Version scheme: `MAJOR.MINOR.PATCH`
 - After a boot on the saved fallback clock, the schedule is re-parsed once NTP syncs, so prev/current/next are picked against real time.
 
 ### Changed
+- Web UI redesigned in a light style (paper background, white panels, F1-red accents). Three tabs: **Schedule**, **Settings** and **System / Diagnostics** (diagnostics, OTA, screenshot and debug level moved off the Config tab). A status bar shows connection, firmware and NTP state; the Schedule tab adds cards for the next session countdown, Grand Prix time and races left. The open tab is kept in the URL hash. No API changes.
 - Removed the hardcoded `upload_port = /dev/cu.usbserial-240` from `platformio.ini`; PlatformIO auto-detects the port (override with `--upload-port`).
 - Removed Universal-Arduino-Telegram-Bot from `lib_deps`; `telegram_handler.h` calls the Bot API directly.
 - Web UI **Test Telegram**, **Resend Last** and the confirmation after saving new credentials are queued and sent from `loop()` instead of the web server task, which they could block for 8 s while racing an automatic notification on the same client. The endpoints return `202`; the page polls `GET /api/telegram/status` (`pending`, `lastResult`) for the outcome.

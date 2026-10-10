@@ -128,7 +128,7 @@ Endpoints:
 - `GET /api/telegram/status` Telegram configured, saved last message, `pending` and `lastResult` (-1 none, 0 failed, 1 sent) of the queued web request.
 - `POST /api/telegram/test` queue a Telegram verification message (`202`).
 - `POST /api/telegram/resend` queue a resend of the last successfully sent Telegram message (`202`).
-- `GET /api/status` heap, uptime, IP.
+- `GET /api/status` heap, uptime, IP, LDR, plus the Hardware & Diagnostics fields: firmware version, build time, running partition, Arduino core / IDF, board, chip, flash size, device name, MAC, SD state, WiFi SSID/RSSI, NTP sync state and server, local time, last reset reason, minimum heap / largest block, LittleFS usage, current race and cached results round.
 - `GET /api/schedule` current race sessions with local day/time and UTC.
 - `GET /api/races` compact upcoming season list.
 - `GET /api/debug` get runtime debug level.

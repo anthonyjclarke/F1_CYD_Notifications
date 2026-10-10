@@ -4,6 +4,9 @@
 #include <ElegantOTA.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#include <esp_ota_ops.h>
+#include <esp_system.h>
+#include <esp_arduino_version.h>
 #include "config.h"
 #include "types.h"
 #include "debug.h"
@@ -27,186 +30,294 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>F1 Display Config</title>
+<title>F1 Display</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e10600'/%3E%3Ctext x='16' y='22' font-family='Arial' font-weight='900' font-style='italic' font-size='15' fill='white' text-anchor='middle'%3EF1%3C/text%3E%3C/svg%3E">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,sans-serif;background:#000;color:#eee;padding:20px;max-width:600px;margin:0 auto}
-#logoWrap{text-align:center;margin-bottom:10px}
-canvas{width:236px;height:128px;border-radius:8px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,0.4)}
-h2{color:#e10600;margin:20px 0 10px;font-size:1.1em;border-bottom:1px solid #333;padding-bottom:5px}
-.status{text-align:center;color:#888;margin-bottom:14px;font-size:0.85em}
-label{display:block;margin:10px 0 4px;color:#ccc;font-size:0.9em}
-input,select{width:100%;padding:10px;border:1px solid #333;border-radius:6px;background:#111;color:#eee;font-size:0.95em}
-input:focus{border-color:#e10600;outline:none}
-.range-wrap{display:flex;align-items:center;gap:10px}
-.range-wrap input[type=range]{flex:1}
-.range-val{min-width:36px;text-align:center;color:#e10600;font-weight:bold}
-button{width:100%;padding:12px;margin-top:20px;border:none;border-radius:6px;background:#e10600;color:#fff;font-size:1em;font-weight:bold;cursor:pointer}
-button:hover{background:#ff1801}
-.btn-sm{width:auto;padding:8px 16px;margin-top:0}
-.btn-row{display:flex;gap:8px;margin-top:10px}
-.btn-row button{flex:1;margin-top:0}
-.btn-secondary{background:#222;border:1px solid #444;color:#eee}
-.btn-secondary:hover{background:#333}
-.msg{text-align:center;padding:10px;margin-top:10px;border-radius:6px;display:none}
-.msg.ok{display:block;background:#0a3d0a;color:#4caf50}
-.msg.err{display:block;background:#3d0a0a;color:#f44}
-.info{background:#111;padding:12px;border-radius:6px;margin-top:15px;font-size:0.85em;color:#888}
-.info span{color:#eee}
-.dbg-row{display:flex;align-items:center;gap:8px;margin-top:8px}
-.dbg-row select{width:auto;flex:1;padding:8px}
-a{color:#e10600}
-.about{text-align:center;margin-top:20px;padding-top:14px;border-top:1px solid #2a2a3e;font-size:0.8em}
-.about-links{margin-bottom:6px}
-.about-links a{color:#4caf50;text-decoration:none;font-weight:bold;font-size:1.05em}
-.about-links a:hover{text-decoration:underline}
-.about-built{color:#aaa;margin-bottom:4px}
-.about-credit{color:#888}
-.about-credit a{color:#888}
-.about-data{color:#777;margin-top:6px}
-.about-data a{color:#777}
-.tabs{display:flex;gap:6px;margin-bottom:16px}
-.tab-btn{flex:1;padding:10px;border:1px solid #333;border-radius:6px;background:#111;color:#888;font-size:0.95em;cursor:pointer;font-weight:bold}
-.tab-btn.active{background:#e10600;color:#fff;border-color:#e10600}
-.sch-hdr{background:#111;padding:12px;border-radius:6px;margin-bottom:12px}
-.sch-hdr .rname{color:#eee;font-weight:bold;font-size:1em}
-.sch-hdr .rloc{color:#888;font-size:0.85em;margin-top:3px}
-.sprint-badge{display:inline-block;background:#ffd700;color:#000;font-size:0.7em;padding:2px 6px;border-radius:4px;margin-left:8px;font-weight:bold;vertical-align:middle}
-table{width:100%;border-collapse:collapse;font-size:0.85em}
-th{color:#e10600;text-align:left;padding:8px 4px;border-bottom:1px solid #333}
-td{padding:7px 4px;border-bottom:1px solid #1e1e2e}
-.s-next td{color:#4caf50}
-.s-gp td:first-child{color:#e10600;font-weight:bold}
-.s-sprint td:first-child{color:#ffd700;font-weight:bold}
-.s-past td{color:#3a3a4a}
-td.cd{font-variant-numeric:tabular-nums;color:#666;font-size:0.8em;white-space:nowrap}
-.s-next td.cd{color:#4caf50;font-weight:bold}
-/* Season calendar */
-#seasonTable td{padding:6px 4px;font-size:0.85em}
-.r-cur td{color:#ffd700;font-weight:bold}
-.r-done td{color:#3a3a4a}
-/* Post-race summary card */
-.post-race-card{background:#111;border:1px solid #2a2a1a;border-radius:6px;padding:10px 12px;margin-bottom:12px}
-.post-race-label{color:#888;font-size:0.7em;text-transform:uppercase;letter-spacing:0.08em}
-.pod-mini{margin-top:8px}
-.p-row{display:flex;align-items:baseline;gap:8px;padding:3px 0;font-size:0.85em}
-.p-pos{min-width:28px;font-weight:bold}
-.p-name{flex:1;color:#ddd}
-.p-team{color:#555;font-size:0.8em;text-align:right}
+:root{--ink:#22272b;--muted:#6b7177;--paper:#f4f3ef;--line:#e2e1db;--rule:#eeede8;--red:#c40500;--brand:#e10600;--soft:#f8f7f3;--edge:#d6d4cc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:960px;margin:auto;padding:40px 32px}
+header{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:8px}
+h1{display:flex;align-items:center;gap:14px;font-size:42px;letter-spacing:-1.6px;margin:0;font-weight:650}
+h2{font-size:22px;letter-spacing:-0.5px;margin:2px 0 4px}
+.dot{color:var(--brand)}
+.eyebrow{font-size:11px;font-weight:750;letter-spacing:2px;color:var(--muted);margin:0 0 8px;text-transform:uppercase}
+.sub,.muted{color:var(--muted)}
+.sub{margin:5px 0 14px}
+a{color:var(--red)}
+#logo{width:88px;height:48px;flex:0 0 auto;background:#fff;border:1px solid var(--line);border-radius:8px}
+button,select,input{font:inherit}
+button,.btn{border:1px solid var(--red);background:var(--red);color:#fff;padding:9px 15px;border-radius:7px;cursor:pointer;white-space:nowrap;text-decoration:none;display:inline-block;line-height:1.5}
+button:hover,.btn:hover{filter:brightness(.94)}
+.secondary{background:transparent;color:var(--red);border-color:var(--edge)}
+.actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+nav .tab{background:none;border:0;padding:4px 2px;color:var(--red);text-decoration:underline;font-size:13px}
+nav .tab.active{color:var(--ink);text-decoration:none;font-weight:650}
+label{display:block;font-size:12px;color:var(--muted)}
+input,select{display:block;width:100%;border:1px solid var(--edge);border-radius:6px;padding:8px 10px;background:#fff;color:var(--ink);margin:4px 0 0}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--red);outline-offset:1px}
+input[type=range]{padding:0;border:0;background:none;accent-color:var(--red)}
+.badge{border-left:4px solid #6f8f7a;border-radius:6px;background:#eaf1e9;padding:12px 16px;margin:16px 0;font-size:14px}
+.badge.busy{border-color:#b28432;background:#fff6dc}
+.badge.warning{border-color:#a45846;background:#fff0e9}
+.badge small{display:block;margin-top:4px;color:var(--muted);font-size:12px}
+.msg{display:none;position:sticky;top:12px;z-index:10;border-radius:7px;padding:10px 15px;margin:0 0 16px;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.msg.ok{display:block;background:#eaf1e9;border:1px solid #d3dfd0}
+.msg.err{display:block;background:#fff0e9;color:#963e27;border:1px solid #f1d6ca}
+.msg a{color:inherit;font-weight:600}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:20px 0}
+.card{border-top:3px solid var(--brand);background:#fff;padding:18px 20px;border-radius:8px}
+.card-label{font-size:13px}
+.card strong{display:block;font-size:28px;font-weight:600;letter-spacing:-0.5px;margin:6px 0;font-variant-numeric:tabular-nums}
+.card small{color:var(--muted);font-size:12px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:10px;padding:24px;margin:22px 0}
+.footnote{font-size:12px;color:var(--muted);margin:12px 0 0}
+.table-wrap{overflow:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);background:var(--soft);font-size:12px}
+tbody tr:hover{background:#fbfaf7}
+th.r,td.cd{text-align:right}
+td.cd{font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.s-past td{color:#a9adb0}
+.s-next td{background:#fdf1ef;font-weight:600}
+.s-next td.cd{color:var(--red)}
+.s-gp td:first-child{color:var(--red);font-weight:650}
+.s-sprint td:first-child{color:#94650a;font-weight:650}
+.r-cur td{font-weight:650}
+.r-cur td:first-child{box-shadow:inset 3px 0 var(--brand)}
+.r-done td{color:#a9adb0}
+.pill{display:inline-block;background:#fff3cd;color:#7a5a00;font-size:10.5px;font-weight:700;letter-spacing:.5px;padding:1px 7px;border-radius:999px;margin-left:8px;vertical-align:2px}
+.post-race{border-left:4px solid var(--brand)}
+.p-row{display:flex;align-items:baseline;gap:12px;padding:8px 0;border-bottom:1px solid var(--rule);font-size:14px}
+.p-row:last-child{border-bottom:0}
+.p-pos{min-width:34px;font-weight:700}
+.p-name{flex:1}
+.p-team{color:var(--muted);font-size:12px;text-align:right}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.range-wrap{display:flex;align-items:center;gap:12px;margin-top:6px}
+.range-wrap input{flex:1;margin:0}
+.range-val{min-width:44px;text-align:right;font-weight:650;font-variant-numeric:tabular-nums}
+.diag-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px 20px;margin-top:14px;align-items:start}
+.kv td{overflow-wrap:anywhere;padding:7px 10px}
+.kv td:first-child{color:var(--muted);width:40%}
+.tool-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--rule)}
+.tool-row:last-child{border-bottom:0;padding-bottom:0}
+.tool-row small{display:block;color:var(--muted);font-size:12px}
+.tool-row select{width:auto;margin:0}
+footer{font-size:12px;color:var(--muted);margin:30px 0;line-height:1.9}
+footer a{color:var(--muted)}
+[hidden]{display:none!important}
+@media (max-width:800px){
+  main{padding:24px 16px}
+  header{flex-direction:column;align-items:flex-start}
+  h1{font-size:34px}
+  .cards{grid-template-columns:1fr 1fr}
+  .panel{padding:17px}
+  .form-grid{grid-template-columns:1fr}
+}
+@media (max-width:480px){
+  .cards{grid-template-columns:1fr}
+  th,td{padding:8px}
+  .tool-row{flex-direction:column;align-items:flex-start}
+}
 </style>
 </head>
 <body>
+<main>
+<header>
+  <div>
+    <p class="eyebrow">F1 CYD &middot; Notifications</p>
+    <h1><canvas id="logo" width="118" height="64"></canvas><span>F1 Display<span class="dot">.</span></span></h1>
+    <p class="sub" style="margin-bottom:0">Race schedule, countdowns and Telegram alerts.</p>
+  </div>
+  <nav class="actions">
+    <button type="button" class="tab active" id="btn-sch" onclick="showTab('sch')">Schedule</button>
+    <button type="button" class="tab" id="btn-cfg" onclick="showTab('cfg')">Settings</button>
+    <button type="button" class="tab" id="btn-diag" onclick="showTab('diag')">System / Diagnostics</button>
+    <button type="button" onclick="refreshAll()">&#8635; Refresh</button>
+  </nav>
+</header>
 
-<div id="logoWrap"><canvas id="logo"></canvas></div>
-<div class="status" id="status">Loading...</div>
-
-<div class="tabs">
-  <button class="tab-btn active" id="btn-sch" onclick="showTab('sch')">&#128197; Schedule</button>
-  <button class="tab-btn" id="btn-cfg" onclick="showTab('cfg')">&#9881; Config</button>
-</div>
-
-<!-- Config Tab -->
-<div id="tab-cfg" style="display:none">
-<form id="configForm">
-<h2>Timezone &amp; NTP</h2>
-<label for="tz">Timezone</label>
-<select id="tz" name="tz"></select>
-<label for="ntp">NTP Server</label>
-<select id="ntp" name="ntp"></select>
-
-<h2>Display</h2>
-<label>Brightness (0 = Auto)</label>
-<div class="range-wrap">
-<input type="range" id="bright" name="bright" min="0" max="255" value="128">
-<span class="range-val" id="brightVal">128</span>
-</div>
-<div style="margin-top:6px;font-size:0.8em;color:#666">LDR: <span id="ldrVal">-</span> / 4095</div>
-
-<h2>Telegram Notifications</h2>
-<label for="bot">Bot Token</label>
-<input type="text" id="bot" name="bot" placeholder="123456:ABC-DEF...">
-<label for="chat">Chat ID</label>
-<input type="text" id="chat" name="chat" placeholder="123456789">
-<div class="btn-row">
-<button type="button" class="btn-secondary" onclick="telegramAction('test')">Test Telegram</button>
-<button type="button" class="btn-secondary" onclick="telegramAction('resend')">Resend Last</button>
-</div>
-
-<button type="submit">Save Configuration</button>
-</form>
-<div class="msg" id="msg"></div>
-
-<div class="info">
-<strong>Debug Level (serial output):</strong>
-<div class="dbg-row">
-<select id="dbg">
-<option value="0">0 - Off</option>
-<option value="1">1 - Error</option>
-<option value="2">2 - Warn</option>
-<option value="3">3 - Info (default)</option>
-<option value="4">4 - Verbose</option>
-</select>
-<button type="button" class="btn-sm" onclick="setDbg()">Apply</button>
-</div>
-</div>
-
-<div class="info">
-<strong>Links:</strong><br>
-<a href="/update">Firmware Update (OTA)</a><br><br>
-<button type="button" class="btn-sm" onclick="captureShot()">Capture TFT Screenshot</button><br><br>
-<strong>Status:</strong><br>
-Free Heap: <span id="heap">-</span><br>
-Uptime: <span id="uptime">-</span>
-</div>
-<div class="about">
-<div class="about-links">
-<a href="https://github.com/anthonyjclarke/F1_CYD_Notifications" target="_blank">GitHub</a>
-&nbsp;|&nbsp;
-<a href="https://bsky.app/profile/anthonyjclarke.bsky.social" target="_blank">Bluesky</a>
-</div>
-<div class="about-built">Built with &#10084; by Anthony Clarke</div>
-<div class="about-credit">Based on original idea by <a href="https://github.com/witnessmenow/F1-Arduino-Notifications" target="_blank">@witnessmenow</a></div>
-<div class="about-data">Data: <a href="https://github.com/sportstimes/f1" target="_blank">sportstimes/f1</a> &amp; <a href="https://github.com/jolpica/jolpica-f1" target="_blank">Jolpica F1 API</a></div>
-</div>
-</div>
+<div id="status" class="badge busy" role="status"><span id="statusMain">Connecting&hellip;</span><small id="statusSub">&nbsp;</small></div>
+<div class="msg" id="msg" role="alert"></div>
 
 <!-- Schedule Tab -->
 <div id="tab-sch">
-<div id="schPrev" style="display:none"></div>
-<div class="sch-hdr">
-<div class="rname" id="schName">Loading...</div>
-<div class="rloc" id="schLoc"></div>
+<section class="cards">
+  <div class="card"><div class="card-label">Next session</div><strong id="cNext">&ndash;</strong><small id="cNextSub">&nbsp;</small></div>
+  <div class="card"><div class="card-label">Grand Prix</div><strong id="cGp">&ndash;</strong><small id="cGpSub">&nbsp;</small></div>
+  <div class="card"><div class="card-label">Season</div><strong id="cSeason">&ndash;</strong><small id="cSeasonSub">&nbsp;</small></div>
+</section>
+
+<section id="schPrev" class="panel post-race" hidden></section>
+
+<section class="panel">
+  <p class="eyebrow" id="schEyebrow">This weekend</p>
+  <h2 id="schName">Loading&hellip;</h2>
+  <p class="sub" id="schLoc"></p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Session</th><th>Day</th><th>Time</th><th class="r">Starts in</th></tr></thead>
+    <tbody id="schBody"></tbody>
+  </table></div>
+  <p class="footnote">Times are in the device timezone (<span id="schTz">-</span>).</p>
+</section>
+
+<section class="panel">
+  <p class="eyebrow">2026 season</p>
+  <h2>Calendar</h2>
+  <div class="table-wrap"><table id="seasonTable">
+    <thead><tr><th>Rd</th><th>Grand Prix</th><th>Location</th><th>Date</th></tr></thead>
+    <tbody id="seasonBody"><tr><td colspan="4" class="muted">Loading&hellip;</td></tr></tbody>
+  </table></div>
+  <p class="footnote">Dates are in this browser's timezone.</p>
+</section>
 </div>
-<table>
-<thead><tr><th>Session</th><th>Day</th><th>Time</th><th>In</th></tr></thead>
-<tbody id="schBody"></tbody>
-</table>
-<h2>2026 Season</h2>
-<table id="seasonTable">
-<thead><tr><th>Rd</th><th>Grand Prix</th><th>Location</th><th>Date</th></tr></thead>
-<tbody id="seasonBody"><tr><td colspan="4" style="color:#555">Loading...</td></tr></tbody>
-</table>
+
+<!-- Settings Tab -->
+<div id="tab-cfg" hidden>
+<form id="configForm">
+<section class="panel">
+  <p class="eyebrow">Time</p>
+  <h2>Timezone &amp; NTP</h2>
+  <p class="sub">Session times on the display and here follow this timezone.</p>
+  <div class="form-grid">
+    <label>Timezone<select id="tz" name="tz"></select></label>
+    <label>NTP server<select id="ntp" name="ntp"></select></label>
+  </div>
+</section>
+
+<section class="panel">
+  <p class="eyebrow">Display</p>
+  <h2>Brightness</h2>
+  <label for="bright">Backlight &ndash; 0 follows the light sensor</label>
+  <div class="range-wrap">
+    <input type="range" id="bright" name="bright" min="0" max="255" value="128">
+    <span class="range-val" id="brightVal">128</span>
+  </div>
+  <p class="footnote">Light sensor reading: <span id="ldrVal">-</span> / 4095</p>
+</section>
+
+<section class="panel">
+  <p class="eyebrow">Notifications</p>
+  <h2>Telegram</h2>
+  <p class="sub">Race week, session reminders and results. A confirmation is sent when these change.</p>
+  <div class="form-grid">
+    <label>Bot token<input type="text" id="bot" name="bot" placeholder="123456:ABC-DEF..." autocomplete="off"></label>
+    <label>Chat ID<input type="text" id="chat" name="chat" placeholder="123456789" autocomplete="off"></label>
+  </div>
+  <div class="actions" style="margin-top:16px">
+    <button type="button" class="secondary" onclick="telegramAction('test')">Send test</button>
+    <button type="button" class="secondary" onclick="telegramAction('resend')">Resend last</button>
+  </div>
+</section>
+
+<div class="actions"><button type="submit">Save settings</button></div>
+</form>
 </div>
+
+<!-- System / Diagnostics Tab -->
+<div id="tab-diag" hidden>
+<section class="panel">
+  <p class="eyebrow">Device</p>
+  <h2>Hardware &amp; diagnostics</h2>
+  <div class="diag-grid">
+    <table class="kv"><thead><tr><th colspan="2">Firmware</th></tr></thead><tbody>
+      <tr><td>Version</td><td id="dFw">-</td></tr>
+      <tr><td>Built</td><td id="dBuilt">-</td></tr>
+      <tr><td>Partition</td><td id="dPart">-</td></tr>
+      <tr><td>Core / IDF</td><td id="dCore">-</td></tr>
+    </tbody></table>
+    <table class="kv"><thead><tr><th colspan="2">Network &amp; time</th></tr></thead><tbody>
+      <tr><td>WiFi</td><td id="dWifi">-</td></tr>
+      <tr><td>IP</td><td id="dIp">-</td></tr>
+      <tr><td>NTP</td><td id="dNtp">-</td></tr>
+      <tr><td>Local time</td><td id="dTime">-</td></tr>
+    </tbody></table>
+    <table class="kv"><thead><tr><th colspan="2">Hardware</th></tr></thead><tbody>
+      <tr><td>Board</td><td id="dBoard">-</td></tr>
+      <tr><td>Chip</td><td id="dChip">-</td></tr>
+      <tr><td>Flash</td><td id="dFlash">-</td></tr>
+      <tr><td>Device</td><td id="dDev">-</td></tr>
+      <tr><td>MAC</td><td id="dMac">-</td></tr>
+      <tr><td>SD card</td><td id="dSd">-</td></tr>
+    </tbody></table>
+    <table class="kv"><thead><tr><th colspan="2">System</th></tr></thead><tbody>
+      <tr><td>Uptime</td><td id="uptime">-</td></tr>
+      <tr><td>Last reset</td><td id="dReset">-</td></tr>
+      <tr><td>Free heap</td><td id="heap">-</td></tr>
+      <tr><td>Heap low / block</td><td id="dHeapLow">-</td></tr>
+      <tr><td>LittleFS</td><td id="dFs">-</td></tr>
+    </tbody></table>
+    <table class="kv"><thead><tr><th colspan="2">F1 data</th></tr></thead><tbody>
+      <tr><td>Current race</td><td id="dRace">-</td></tr>
+      <tr><td>Results cached</td><td id="dResults">-</td></tr>
+    </tbody></table>
+  </div>
+</section>
+
+<section class="panel">
+  <p class="eyebrow">Tools</p>
+  <h2>Maintenance</h2>
+  <div class="tool-row">
+    <div><strong>Firmware update</strong><small>Upload a *-firmware.bin over the network.</small></div>
+    <a class="btn secondary" href="/update">Open OTA update</a>
+  </div>
+  <div class="tool-row">
+    <div><strong>TFT screenshot</strong><small>Saved to the SD card, or held in RAM for download.</small></div>
+    <button type="button" class="secondary" onclick="captureShot()">Capture screenshot</button>
+  </div>
+  <div class="tool-row">
+    <div><strong>Serial debug level</strong><small>Runtime only &ndash; resets on reboot.</small></div>
+    <div class="actions">
+      <select id="dbg">
+        <option value="0">0 - Off</option>
+        <option value="1">1 - Error</option>
+        <option value="2">2 - Warn</option>
+        <option value="3">3 - Info (default)</option>
+        <option value="4">4 - Verbose</option>
+      </select>
+      <button type="button" class="secondary" onclick="setDbg()">Apply</button>
+    </div>
+  </div>
+</section>
+</div>
+
+<footer>
+  <div><a href="https://github.com/anthonyjclarke/F1_CYD_Notifications" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://bsky.app/profile/anthonyjclarke.bsky.social" target="_blank" rel="noopener">Bluesky</a> &middot; Built with &#10084; by Anthony Clarke</div>
+  <div>Based on an original idea by <a href="https://github.com/witnessmenow/F1-Arduino-Notifications" target="_blank" rel="noopener">@witnessmenow</a> &middot; Data: <a href="https://github.com/sportstimes/f1" target="_blank" rel="noopener">sportstimes/f1</a> &amp; <a href="https://github.com/jolpica/jolpica-f1" target="_blank" rel="noopener">Jolpica F1 API</a></div>
+</footer>
+</main>
 
 <script>
 const $ = id => document.getElementById(id);
 const bright = $('bright');
-bright.oninput = () => $('brightVal').textContent = bright.value;
+const brightLabel = v => v == 0 ? 'Auto' : v;
+bright.oninput = () => $('brightVal').textContent = brightLabel(bright.value);
 
+const TABS = ['sch', 'cfg', 'diag'];
 function showTab(t) {
-  $('tab-sch').style.display = t==='sch' ? '' : 'none';
-  $('tab-cfg').style.display = t==='cfg' ? '' : 'none';
-  $('btn-sch').className = 'tab-btn' + (t==='sch' ? ' active' : '');
-  $('btn-cfg').className = 'tab-btn' + (t==='cfg' ? ' active' : '');
+  if (!TABS.includes(t)) t = 'sch';
+  TABS.forEach(k => {
+    $('tab-' + k).hidden = k !== t;
+    $('btn-' + k).classList.toggle('active', k === t);
+  });
+  history.replaceState(null, '', '#' + t);
+}
+
+function refreshAll() {
+  loadStatus();
+  loadSchedule();
+  loadRaces();
 }
 
 async function renderLogo() {
   try {
     const r = await fetch('/logo.raw');
+    if (!r.ok) throw new Error(r.status);
     const buf = await r.arrayBuffer();
     const px = new Uint16Array(buf);
     const c = $('logo');
-    c.width = 118; c.height = 64;
     const ctx = c.getContext('2d');
     const img = ctx.createImageData(118, 64);
     for (let i = 0; i < px.length; i++) {
@@ -217,7 +328,7 @@ async function renderLogo() {
       img.data[i*4+3] = 255;
     }
     ctx.putImageData(img, 0, 0);
-  } catch(e) { $('logoWrap').style.display = 'none'; }
+  } catch(e) { $('logo').hidden = true; }
 }
 
 async function loadConfig() {
@@ -228,8 +339,8 @@ async function loadConfig() {
     $('ntp').value  = c.ntp    || 'pool.ntp.org';
     $('bot').value  = c.bot    || '';
     $('chat').value = c.chat   || '';
-    bright.value    = c.bright || 128;
-    $('brightVal').textContent = bright.value;
+    bright.value    = c.bright ?? 128;   // 0 = auto, keep it
+    $('brightVal').textContent = brightLabel(bright.value);
   } catch(e) { console.error(e); }
 }
 
@@ -237,11 +348,47 @@ async function loadStatus() {
   try {
     const r = await fetch('/api/status');
     const s = await r.json();
-    $('status').textContent = 'Connected \u2014 ' + s.ip;
     $('heap').textContent   = s.heap   || '-';
     $('uptime').textContent = s.uptime || '-';
     if (s.ldr !== undefined) $('ldrVal').textContent = s.ldr;
-  } catch(e) { $('status').textContent = 'Connection error'; }
+    const kb = b => Math.round(b / 1024) + ' KB';
+    const rssiQ = r => r >= -60 ? 'good' : r >= -70 ? 'fair' : 'weak';
+    $('dFw').textContent    = 'v' + s.fw;
+    $('dBuilt').textContent = s.built;
+    $('dPart').textContent  = s.part;
+    $('dCore').textContent  = 'Arduino ' + s.core + ' / ' + s.sdk;
+    $('dBoard').textContent = s.board;
+    $('dChip').textContent  = s.chip + ' rev ' + s.chipRev + ' · ' + s.cores + ' cores @ ' + s.cpuMhz + ' MHz';
+    $('dFlash').textContent = (s.flash / 1048576) + ' MB';
+    $('dDev').textContent   = s.device;
+    $('dMac').textContent   = s.mac;
+    $('dSd').textContent    = s.sd ? 'Ready' : 'Not detected';
+    $('dWifi').textContent  = s.ssid + ' · ' + s.rssi + ' dBm (' + rssiQ(s.rssi) + ')';
+    $('dIp').textContent    = s.ip;
+    let ntpText;
+    if (s.ntpSynced) {
+      const ago = Math.max(0, Math.round((s.now - s.ntpLast) / 60));
+      ntpText = 'Synced ' + (ago < 1 ? 'just now' : ago + ' min ago') + ' · ' + s.ntpServer;
+    } else {
+      ntpText = 'Not synced – using saved time';
+    }
+    $('dNtp').textContent   = ntpText;
+    $('dTime').textContent  = s.localTime + ' (' + s.tz + ')';
+    $('schTz').textContent  = s.tz;
+    $('dReset').textContent = s.reset;
+    $('dHeapLow').textContent = kb(s.heapMin) + ' / ' + kb(s.heapMaxBlock);
+    $('dFs').textContent    = kb(s.fsUsed) + ' of ' + kb(s.fsTotal) + ' used';
+    $('dRace').textContent  = s.raceRound ? 'R' + s.raceRound + ' ' + s.raceName : 'No schedule';
+    $('dResults').textContent = s.resultsRound ? 'R' + s.resultsRound : 'None';
+
+    $('status').className = s.ntpSynced ? 'badge' : 'badge busy';
+    $('statusMain').textContent = '✓ Connected · ' + s.device + ' · ' + s.ip + ' · v' + s.fw;
+    $('statusSub').textContent  = 'NTP: ' + ntpText + ' · Device time ' + s.localTime;
+  } catch(e) {
+    $('status').className = 'badge warning';
+    $('statusMain').textContent = 'Connection lost';
+    $('statusSub').textContent  = 'Retrying every 10 seconds.';
+  }
 }
 
 async function loadDebug() {
@@ -261,7 +408,7 @@ async function setDbg() {
 // Sends run on the device's main loop; poll until it reports the result
 async function waitTelegram(msg, okText, failText) {
   msg.className = 'msg ok';
-  msg.textContent = 'Sending Telegram message\u2026';
+  msg.textContent = 'Sending Telegram message…';
   for (let i = 0; i < 120; i++) {   // up to 30 s
     await new Promise(r => setTimeout(r, 250));
     try {
@@ -275,7 +422,7 @@ async function waitTelegram(msg, okText, failText) {
     } catch(_) {}
   }
   msg.className = 'msg err';
-  msg.textContent = 'Telegram: no result yet \u2013 check the device log';
+  msg.textContent = 'Telegram: no result yet – check the device log';
 }
 
 async function telegramAction(action) {
@@ -295,7 +442,7 @@ async function telegramAction(action) {
     msg.className = 'msg err';
     msg.textContent = 'Telegram error: ' + e.message;
   }
-  setTimeout(() => msg.style.display = 'none', 8000);
+  setTimeout(() => msg.className = 'msg', 8000);
 }
 
 async function captureShot() {
@@ -306,8 +453,7 @@ async function captureShot() {
     msg.className = r.ok ? 'msg ok' : 'msg err';
     if (r.ok && d.ram) {
       // No SD card — captured to RAM; poll then show download link
-      msg.innerHTML = 'Capturing to RAM&hellip; <a id="dlLink" style="color:#4caf50;display:none;text-decoration:underline;" href="/api/screenshot/download?ram=1" download="screenshot.bmp">Download</a>';
-      msg.style.display = 'block';
+      msg.innerHTML = 'Capturing to RAM&hellip; <a id="dlLink" hidden href="/api/screenshot/download?ram=1" download="screenshot.bmp">Download</a>';
       let attempts = 0;
       const checkReady = async () => {
         attempts++;
@@ -316,7 +462,7 @@ async function captureShot() {
           const st = await chk.json();
           if (st.ram_ready) {
             const link = $('dlLink');
-            if (link) link.style.display = 'inline';
+            if (link) link.hidden = false;
             return;
           }
         } catch(_) {}
@@ -325,8 +471,7 @@ async function captureShot() {
       setTimeout(checkReady, 200);
     } else if (r.ok && d.queued) {
       // SD card path — poll until capture completes, then show download link
-      msg.textContent = 'Capturing\u2026';
-      msg.style.display = 'block';
+      msg.textContent = 'Capturing…';
       let attempts = 0;
       const checkDone = async () => {
         attempts++;
@@ -336,7 +481,7 @@ async function captureShot() {
           if (!st.busy && st.lastPath) {
             const filename = st.lastPath.split('/').pop();
             const url = `/api/screenshot/download?file=${encodeURIComponent(filename)}`;
-            msg.innerHTML = `Screenshot saved: <a href="${url}" target="_blank" style="color:#4caf50;text-decoration:underline;">${st.lastPath}</a>`;
+            msg.innerHTML = `Screenshot saved: <a href="${url}" target="_blank">${st.lastPath}</a>`;
             return;
           } else if (!st.busy && st.lastError) {
             msg.className = 'msg err';
@@ -351,13 +496,11 @@ async function captureShot() {
     } else {
       msg.textContent = d.error || 'Screenshot failed';
     }
-    msg.style.display = 'block';
   } catch(e) {
     msg.className = 'msg err';
     msg.textContent = 'Screenshot error: ' + e.message;
-    msg.style.display = 'block';
   }
-  setTimeout(() => msg.style.display = 'none', 12000);
+  setTimeout(() => msg.className = 'msg', 12000);
 }
 
 $('configForm').onsubmit = async (e) => {
@@ -374,18 +517,18 @@ $('configForm').onsubmit = async (e) => {
     msg.className   = r.ok ? 'msg ok'  : 'msg err';
     if (r.ok && d.telegramTestQueued) {
       await waitTelegram(msg,
-        'Configuration saved. Telegram confirmation sent.',
-        'Configuration saved. Telegram confirmation failed.');
+        'Settings saved. Telegram confirmation sent.',
+        'Settings saved. Telegram confirmation failed.');
     } else if (r.ok && d.telegramConfigured && d.telegramChanged) {
       msg.className = 'msg err';
-      msg.textContent = 'Configuration saved. Telegram confirmation not sent (another send in progress).';
+      msg.textContent = 'Settings saved. Telegram confirmation not sent (another send in progress).';
     } else {
-      msg.textContent = r.ok ? 'Configuration saved!' : 'Save failed';
+      msg.textContent = r.ok ? 'Settings saved' : 'Save failed';
     }
   } catch(e) {
     msg.className = 'msg err'; msg.textContent = 'Error: ' + e.message;
   }
-  setTimeout(() => msg.style.display = 'none', 8000);
+  setTimeout(() => msg.className = 'msg', 8000);
 };
 
 // --- Schedule Tab ---
@@ -408,42 +551,38 @@ async function loadSchedule() {
     const r = await fetch('/api/schedule');
     const d = await r.json();
     const prevDiv = $('schPrev');
+    const postRace = d.postRace && d.next;
 
-    if (d.postRace && d.next) {
-      // Post-race mode: collapsed card for finished race, next race expanded
-      const posColors = ['#ffd700','#c0c0c0','#cd7f32','#999','#999'];
+    if (postRace) {
+      // Post-race mode: podium card for the finished race, next race below
+      const posColors = ['#b8860b','#7d8590','#a0612b','#6b7177','#6b7177'];
       const posLabels = ['1st','2nd','3rd','4th','5th'];
-      let podHtml = '';
+      let podHtml;
       if (d.resultsAvailable && d.podium && d.podium.length) {
-        podHtml = '<div class="pod-mini">' +
-          d.podium.map((p,i) =>
-            '<div class="p-row">' +
-            '<span class="p-pos" style="color:' + posColors[i] + '">' + posLabels[i] + '</span>' +
-            '<span class="p-name">' + p.name + '</span>' +
-            '<span class="p-team">' + p.team + '</span>' +
-            '</div>'
-          ).join('') + '</div>';
+        podHtml = d.podium.map((p,i) =>
+          '<div class="p-row">' +
+          '<span class="p-pos" style="color:' + posColors[i] + '">' + posLabels[i] + '</span>' +
+          '<span class="p-name">' + p.name + '</span>' +
+          '<span class="p-team">' + p.team + '</span>' +
+          '</div>').join('');
       } else {
-        podHtml = '<div style="color:#555;font-size:0.8em;margin-top:6px">Results not yet available</div>';
+        podHtml = '<p class="muted" style="margin:0">Results not yet available.</p>';
       }
-      prevDiv.style.display = '';
-      prevDiv.innerHTML = '<div class="post-race-card">' +
-        '<div class="post-race-label">&#x2714; Post-Race &mdash; R' + d.round + ': ' + d.name + ' Grand Prix</div>' +
-        podHtml + '</div>';
-
-      // Expand next race in main schedule area
-      const next = d.next;
-      $('schName').innerHTML = 'Round ' + next.round + ': ' + next.name + ' Grand Prix' +
-        (next.isSprint ? '<span class="sprint-badge">SPRINT</span>' : '');
-      $('schLoc').textContent = next.location;
-      schedSessions = next.sessions || [];
-    } else {
-      prevDiv.style.display = 'none';
-      $('schName').innerHTML = 'Round ' + d.round + ': ' + d.name + ' Grand Prix' +
-        (d.isSprint ? '<span class="sprint-badge">SPRINT</span>' : '');
-      $('schLoc').textContent = d.location;
-      schedSessions = d.sessions || [];
+      prevDiv.innerHTML = '<p class="eyebrow">&#10003; Post-race &middot; Round ' + d.round + '</p>' +
+        '<h2 style="margin-bottom:10px">' + d.name + ' Grand Prix</h2>' + podHtml;
     }
+    prevDiv.hidden = !postRace;
+
+    const race = postRace ? d.next : d;
+    $('schEyebrow').textContent = 'Round ' + race.round + (postRace ? ' · Up next' : ' · This race');
+    $('schName').innerHTML = race.name + ' Grand Prix' +
+      (race.isSprint ? '<span class="pill">SPRINT</span>' : '');
+    $('schLoc').textContent = race.location;
+    schedSessions = race.sessions || [];
+
+    const gp = schedSessions.find(s => s.type === 6);   // SESSION_GP
+    $('cGp').textContent    = gp ? gp.day + ' ' + gp.time : '–';
+    $('cGpSub').textContent = 'R' + race.round + ' · ' + race.name + ' · ' + race.location;
     renderSchedule();
   } catch(e) { $('schName').textContent = 'Failed to load schedule'; }
 }
@@ -470,6 +609,14 @@ function renderSchedule() {
                     '<td class="cd" id="cd' + i + '">' + inTxt + '</td>';
     tb.appendChild(row);
   });
+  updateNextCard();
+}
+
+function updateNextCard() {
+  const nx = schedSessions.find(s => s.utc > Math.floor(Date.now() / 1000));
+  $('cNext').textContent    = nx ? fmtIn(nx.utc) : 'Done';
+  $('cNextSub').textContent = nx ? nx.label + ' · ' + nx.day + ' ' + nx.time
+                                 : 'All sessions this weekend have run';
 }
 
 function updateCountdowns() {
@@ -477,8 +624,9 @@ function updateCountdowns() {
   schedSessions.forEach((s, i) => {
     const el = $('cd' + i);
     if (!el) return;
-    el.textContent = (s.utc <= now) ? '\u2014' : (fmtIn(s.utc) || '\u2014');
+    el.textContent = (s.utc <= now) ? '—' : (fmtIn(s.utc) || '—');
   });
+  updateNextCard();
 }
 
 function fmtGpDate(utcSec) {
@@ -490,24 +638,29 @@ async function loadRaces() {
   try {
     const r = await fetch('/api/races');
     const d = await r.json();
+    const races = d.races || [];
     const now = Math.floor(Date.now() / 1000);
     const tb = $('seasonBody');
     tb.innerHTML = '';
-    (d.races || []).forEach((race, i) => {
+    races.forEach((race, i) => {
       const done = race.gp < now;
       const cur  = i === 0 && !done;
       const cls  = done ? 'r-done' : cur ? 'r-cur' : '';
       const row  = document.createElement('tr');
       if (cls) row.className = cls;
-      const badge = race.isSprint ? '<span class="sprint-badge">S</span>' : '';
+      const badge = race.isSprint ? '<span class="pill">SPRINT</span>' : '';
       row.innerHTML = '<td>' + race.round + '</td>' +
         '<td>' + race.name + badge + '</td>' +
         '<td>' + race.location + '</td>' +
         '<td style="white-space:nowrap">' + fmtGpDate(race.gp) + '</td>';
       tb.appendChild(row);
     });
+    const left = races.filter(x => x.gp > now).length;
+    const last = races[races.length - 1];
+    $('cSeason').textContent    = left ? left + (left === 1 ? ' race' : ' races') + ' left' : 'Complete';
+    $('cSeasonSub').textContent = last ? 'Finale: ' + last.name + ' · ' + fmtGpDate(last.gp) : '';
   } catch(e) {
-    $('seasonBody').innerHTML = '<tr><td colspan="4" style="color:#555">Load failed</td></tr>';
+    $('seasonBody').innerHTML = '<tr><td colspan="4" class="muted">Load failed</td></tr>';
   }
 }
 
@@ -531,7 +684,7 @@ function populateSelects() {
     'time.apple.com','time.windows.com','ntp.ubuntu.com','0.amazon.pool.ntp.org',
     'time1.google.com','time2.google.com'
   ];
-  
+
   const tzSel = $('tz');
   tzOpts.forEach(o => {
     const opt = document.createElement('option');
@@ -539,7 +692,7 @@ function populateSelects() {
     opt.textContent = o;
     tzSel.appendChild(opt);
   });
-  
+
   const ntpSel = $('ntp');
   ntpOpts.forEach(o => {
     const opt = document.createElement('option');
@@ -549,6 +702,7 @@ function populateSelects() {
   });
 }
 
+showTab(location.hash.slice(1));
 renderLogo();
 populateSelects();
 loadConfig();
@@ -562,6 +716,23 @@ setInterval(updateCountdowns, 1000);
 </body>
 </html>
 )rawliteral";
+
+// Plain-English reason for the last reset (Hardware & Diagnostics panel)
+static const char* resetReasonText(esp_reset_reason_t r) {
+    switch (r) {
+        case ESP_RST_POWERON:   return "Power on";
+        case ESP_RST_EXT:       return "External reset";
+        case ESP_RST_SW:        return "Software restart";
+        case ESP_RST_PANIC:     return "Crash (panic)";
+        case ESP_RST_INT_WDT:   return "Interrupt watchdog";
+        case ESP_RST_TASK_WDT:  return "Task watchdog";
+        case ESP_RST_WDT:       return "Watchdog";
+        case ESP_RST_DEEPSLEEP: return "Deep sleep wake";
+        case ESP_RST_BROWNOUT:  return "Brownout";
+        case ESP_RST_SDIO:      return "SDIO reset";
+        default:                return "Unknown";
+    }
+}
 
 // Timezone / NTP server changed by POST /api/config; applied by loop() so the
 // handler never blocks the AsyncTCP task (initTime() could wait 15 s for NTP).
@@ -728,6 +899,47 @@ void setupWebServer(AppConfig& cfg) {
         doc["uptime"] = uptime;
         doc["ip"]     = WiFi.localIP().toString();
         doc["ldr"]    = analogRead(PIN_LDR);
+
+        // Hardware & Diagnostics panel
+        doc["fw"]      = FIRMWARE_VERSION;
+        doc["built"]   = __DATE__ " " __TIME__;
+        doc["part"]    = esp_ota_get_running_partition()->label;
+        char core[16];
+        snprintf(core, sizeof(core), "%d.%d.%d", ESP_ARDUINO_VERSION_MAJOR,
+                 ESP_ARDUINO_VERSION_MINOR, ESP_ARDUINO_VERSION_PATCH);
+        doc["core"]    = core;
+        doc["sdk"]     = ESP.getSdkVersion();
+        doc["board"]   = BOARD_NAME;
+        doc["chip"]    = ESP.getChipModel();
+        doc["chipRev"] = ESP.getChipRevision();
+        doc["cores"]   = ESP.getChipCores();
+        doc["cpuMhz"]  = ESP.getCpuFreqMHz();
+        doc["flash"]   = ESP.getFlashChipSize();
+        char device[16];  // Same name the web installer shows (improv_setup.cpp)
+        snprintf(device, sizeof(device), IMPROV_DEVICE_PREFIX "-%04X",
+                 (unsigned)(ESP.getEfuseMac() & 0xFFFF));
+        doc["device"]  = device;
+        doc["mac"]     = WiFi.macAddress();
+        doc["sd"]      = screenshotSdReady;
+        doc["ssid"]    = WiFi.SSID();
+        doc["rssi"]    = WiFi.RSSI();
+        doc["ntpSynced"] = ntpHasSynced();
+        doc["ntpLast"] = (long)lastNtpUpdateTime();
+        doc["now"]     = (long)nowUTC();
+        doc["ntpServer"] = _webConfigPtr ? _webConfigPtr->ntpServer : "";
+        doc["tz"]      = _webConfigPtr ? _webConfigPtr->timezone : "";
+        char localTime[48];
+        formatLocalFullDate(nowUTC(), localTime, sizeof(localTime));
+        doc["localTime"] = localTime;
+        doc["reset"]   = resetReasonText(esp_reset_reason());
+        doc["heapMin"] = ESP.getMinFreeHeap();
+        doc["heapMaxBlock"] = ESP.getMaxAllocHeap();
+        doc["fsUsed"]  = LittleFS.usedBytes();
+        doc["fsTotal"] = LittleFS.totalBytes();
+        RaceData& race = getCurrentRace();
+        doc["raceRound"] = race.round;
+        doc["raceName"]  = race.name;
+        doc["resultsRound"] = resultsRound;
         String json;
         serializeJson(doc, json);
         request->send(200, "application/json", json);

@@ -225,10 +225,10 @@ Touch input manually advances to the next state in the active phase.
 
 Enabled when both bot token and chat ID are configured (see details in [TELEGRAM_SETUP.md](./TELEGRAM_SETUP.md)).
 
-When Telegram credentials are changed in the Web UI, the firmware sends a confirmation message to the configured chat straight away. The Config tab also provides:
+When Telegram credentials are changed in the Web UI, the firmware sends a confirmation message to the configured chat straight away. The Settings tab also provides:
 
-- **Test Telegram**: sends a verification message using the saved token/chat ID.
-- **Resend Last**: resends the last Telegram message that was successfully delivered and saved on LittleFS.
+- **Send test**: sends a verification message using the saved token/chat ID.
+- **Resend last**: resends the last Telegram message that was successfully delivered and saved on LittleFS.
 
 Notification types:
 
@@ -244,11 +244,15 @@ Each notification is sent once per race: a bitmask saved to config right after e
 
 ## Web UI
 
-### Config Tab
+A light, single-page UI with three tabs. The status bar under the header shows connection, firmware version and NTP state, refreshed every 10 s.
+
+- **Schedule** – cards for the next session (live countdown), Grand Prix time and races left; the post-race podium; this weekend's sessions; the season calendar.
+- **Settings** – timezone and NTP server, display brightness (0 = auto), Telegram bot token and chat ID with test / resend.
+- **System / Diagnostics** – firmware, network, hardware, system and F1-data panels, plus OTA update, TFT screenshot and serial debug level.
+
+The open tab is kept in the URL (`/#sch`, `/#cfg`, `/#diag`). The screenshots below are from the earlier dark UI.
 
 ![Web UI Config](./images/WebUI_Config.jpg)
-
-### Schedule Tab
 
 ![Web UI Schedule](./images/WebUI_Schedule.jpg)
 
@@ -256,7 +260,7 @@ Each notification is sent once per race: a bitmask saved to config right after e
 
 Base URL: `http://<device-ip>/`
 
-- `GET /` config + schedule UI
+- `GET /` web UI (Schedule, Settings, System / Diagnostics)
 - `GET /update` OTA page
 - `GET /api/config` current config JSON
 - `POST /api/config` update config
@@ -264,7 +268,7 @@ Base URL: `http://<device-ip>/`
 - `GET /api/telegram/status` Telegram configured/ready/last-message status
 - `POST /api/telegram/test` send a Telegram verification message
 - `POST /api/telegram/resend` resend the last successfully sent Telegram message
-- `GET /api/status` heap/uptime/IP
+- `GET /api/status` heap/uptime/IP and the Hardware & Diagnostics panel data
 - `GET /api/schedule` current race sessions
 - `GET /api/races` upcoming rounds list
 - `GET /api/debug` get debug level
@@ -284,12 +288,12 @@ What it does:
 - Uses request-queue flow so web/button triggers execute safely in `loop()`
 
 Trigger options:
-- Web UI button: **Capture TFT Screenshot**
+- Web UI: **System / Diagnostics → Capture screenshot**
 - Web API: `POST /api/screenshot`
 - Optional physical button (active LOW, `INPUT_PULLUP`) on `PIN_SHOT_BTN`
 
 Download options:
-- Web UI button: **Capture TFT Screenshot** — polls for completion then shows download link
+- Web UI: **Capture screenshot** — polls for completion then shows download link
 - Web API: `GET /api/screenshot/download?file=<name>` (SD) or `?ram=1` (RAM fallback)
 - Status polling: `GET /api/screenshot/status` → `{sd_ready, ram_ready, busy, lastPath, lastError}`
 
