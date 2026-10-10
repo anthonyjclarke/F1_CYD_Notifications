@@ -17,6 +17,8 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ## [Unreleased]
 
+## [0.8.0] Unreleased
+
 ## [0.7.0] 11-10-2026
 
 ### Added
