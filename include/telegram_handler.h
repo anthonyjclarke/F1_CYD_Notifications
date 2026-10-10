@@ -1,20 +1,21 @@
 #pragma once
 
+#include <HTTPClient.h>
 #include <WiFiClientSecure.h>
-#include <UniversalTelegramBot.h>
+#include <ArduinoJson.h>
 #include <LittleFS.h>
 #include "config.h"
 #include "types.h"
 #include "debug.h"
 #include "time_utils.h"
+#include "config_manager.h"
 
-static WiFiClientSecure telegramClient;
-static UniversalTelegramBot* bot = nullptr;
-static bool telegramReady = false;
-
-bool telegramIsReady() {
-    return telegramReady && bot != nullptr;
-}
+// Web UI Test / Resend requests. The AsyncTCP handler only queues them;
+// loop() sends via handleTelegramRequests() so a slow send never blocks the
+// web server task and never overlaps an automatic notification.
+enum TelegramRequest : uint8_t { TG_REQ_NONE, TG_REQ_TEST, TG_REQ_RESEND };
+static volatile uint8_t telegramRequest = TG_REQ_NONE;
+static volatile int8_t telegramLastResult = -1;  // -1 none yet, 0 failed, 1 sent
 
 bool telegramHasLastMessage() {
     File f = LittleFS.open(TELEGRAM_LAST_FILE, "r");
@@ -43,56 +44,75 @@ String loadLastTelegramMessage() {
     return message;
 }
 
-// Initialize Telegram bot
-void initTelegram(const char* token) {
-    if (bot) {
-        delete bot;
-        bot = nullptr;
-    }
+// One HTTPS POST to the Bot API; returns the HTTP code (negative = transport error).
+// Never retried here: UniversalTelegramBot re-POSTed for up to 8 s whenever it
+// misread a slow reply, so Telegram received (and delivered) the message twice.
+static int postTelegramMessage(const AppConfig& cfg, const String& message, bool markdown) {
+    WiFiClientSecure client;
+    client.setInsecure();  // No cert pinning for api.telegram.org
+    HTTPClient http;
 
-    if (strlen(token) == 0) {
-        DBG_WARN("[Telegram] No bot token configured");
-        telegramReady = false;
-        return;
+    // The Bot API takes the token in the path; never log this URL.
+    String url = "https://api.telegram.org/bot";
+    url += cfg.botToken;
+    url += "/sendMessage";
+    if (!http.begin(client, url)) {
+        DBG_WARN("[Telegram] HTTP begin failed");
+        return -1;
     }
-    telegramClient.setInsecure();  // Skip cert verification
-    bot = new UniversalTelegramBot(token, telegramClient);
-    telegramReady = true;
-    DBG_INFO("[Telegram] Bot initialized");
+    http.setTimeout(TELEGRAM_TIMEOUT_MS);
+    http.addHeader("Content-Type", "application/json");
+
+    JsonDocument doc;
+    doc["chat_id"] = cfg.chatId;
+    doc["text"]    = message;
+    if (markdown) doc["parse_mode"] = "Markdown";
+    String body;
+    serializeJson(doc, body);
+
+    int code = http.POST(body);
+    if (code > 0 && code != HTTP_CODE_OK) {
+        // Error replies carry a "description" (never the token) - log it for diagnosis
+        DBG_WARN("[Telegram] HTTP %d: %s", code, http.getString().c_str());
+    }
+    http.end();
+    return code;
 }
 
-// Send a message via Telegram
-bool sendTelegramMessage(const char* chatId, const String& message) {
-    if (!telegramReady || !bot || strlen(chatId) == 0) {
-        DBG_WARN("[Telegram] Cannot send: not ready or no chat ID");
+// Send a message via Telegram (Markdown). Returns true once Telegram accepted it.
+bool sendTelegramMessage(const AppConfig& cfg, const String& message) {
+    if (!cfg.telegramEnabled || WiFi.status() != WL_CONNECTED) {
+        DBG_WARN("[Telegram] Cannot send: not configured or WiFi down");
         return false;
     }
-    DBG_VERBOSE("[Telegram] Sending to chat %s (%d chars)", chatId, message.length());
-    bool ok = bot->sendMessage(chatId, message, "");
-    if (ok) {
+    DBG_VERBOSE("[Telegram] Sending to chat %s (%d chars)", cfg.chatId, message.length());
+    int code = postTelegramMessage(cfg, message, true);
+    if (code == HTTP_CODE_BAD_REQUEST) {
+        // 400 = rejected, nothing delivered (e.g. a name breaks Markdown) - safe to resend as plain text
+        DBG_WARN("[Telegram] Markdown rejected, resending as plain text");
+        code = postTelegramMessage(cfg, message, false);
+    }
+    if (code == HTTP_CODE_OK) {
         DBG_INFO("[Telegram] Message sent OK");
         saveLastTelegramMessage(message);
-    } else {
-        DBG_WARN("[Telegram] Send failed");
+        return true;
     }
-    return ok;
+    DBG_WARN("[Telegram] Send failed (%d)", code);
+    return false;
 }
 
 String formatTelegramConfigTestMessage() {
-    String msg = "F1 Display Telegram test\n\n";
+    String msg = "*F1 Display Telegram test*\n\n";
     msg += "Telegram credentials are configured and this chat can receive messages.";
     return msg;
 }
 
 bool sendTelegramConfigTest(const AppConfig& cfg) {
-    if (!cfg.telegramEnabled || strlen(cfg.botToken) == 0 || strlen(cfg.chatId) == 0) {
+    if (!cfg.telegramEnabled) {
         DBG_WARN("[Telegram] Test skipped: token/chat not configured");
         return false;
     }
-    if (!telegramIsReady()) {
-        initTelegram(cfg.botToken);
-    }
-    return sendTelegramMessage(cfg.chatId, formatTelegramConfigTestMessage());
+    return sendTelegramMessage(cfg, formatTelegramConfigTestMessage());
 }
 
 bool resendLastTelegramMessage(const AppConfig& cfg) {
@@ -101,11 +121,29 @@ bool resendLastTelegramMessage(const AppConfig& cfg) {
         DBG_WARN("[Telegram] No saved message to resend");
         return false;
     }
-    if (!telegramIsReady()) {
-        initTelegram(cfg.botToken);
-    }
     DBG_INFO("[Telegram] Resending last saved message");
-    return sendTelegramMessage(cfg.chatId, message);
+    return sendTelegramMessage(cfg, message);
+}
+
+// Queue a web UI request. Returns false if one is already pending.
+bool queueTelegramRequest(TelegramRequest req) {
+    if (telegramRequest != TG_REQ_NONE) return false;
+    telegramLastResult = -1;
+    telegramRequest = req;
+    return true;
+}
+
+bool telegramRequestPending() {
+    return telegramRequest != TG_REQ_NONE;
+}
+
+// Run a queued web UI request - called from loop()
+void handleTelegramRequests(const AppConfig& cfg) {
+    uint8_t req = telegramRequest;
+    if (req == TG_REQ_NONE) return;
+    bool ok = (req == TG_REQ_TEST) ? sendTelegramConfigTest(cfg) : resendLastTelegramMessage(cfg);
+    telegramLastResult = ok ? 1 : 0;
+    telegramRequest = TG_REQ_NONE;
 }
 
 // Format race week notification message
@@ -164,21 +202,39 @@ String formatResultsMessage(RaceData& race, RaceResult* results, uint8_t count) 
     return msg;
 }
 
+// Record a sent notification and persist it straight away, so a reboot
+// before the next save can't send it again.
+static void markNotified(AppConfig& cfg, uint8_t bit) {
+    cfg.notificationBits |= bit;
+    saveConfig(cfg);
+}
+
 // Check and send notifications - called every minute from loop()
 void checkNotifications(RaceData& race, AppConfig& cfg) {
-    if (!cfg.telegramEnabled || !telegramReady) return;
+    if (!cfg.telegramEnabled) return;
+
+    // A fallback (saved) clock can resolve an earlier round - wait for real NTP time.
+    if (!ntpHasSynced()) return;
 
     time_t now = nowUTC();
 
-    // Reset notification bits when we move to a new upcoming race round.
-    // During the overlap window (post-race R(n) + countdown to R(n+1)), parseSchedule
-    // advances getCurrentRace() to R(n+1) while R(n) results are still in memory.
-    // Preserve NOTIFY_RESULT in that case to prevent re-sending stale results.
-    if (cfg.lastNotifiedRound != race.round) {
-        DBG_INFO("[Telegram] New round (%d→%d), resetting notification bits",
-                 cfg.lastNotifiedRound, race.round);
+    // The bits belong to the race whose GP is notifiedGpUtc. Only a later race resets
+    // them, so a schedule parsed against a stale clock can't step back a round, clear
+    // the bits and re-send. A race older than the notified one is ignored.
+    if (race.gpTimeUtc < cfg.notifiedGpUtc) return;
+    if (race.gpTimeUtc > cfg.notifiedGpUtc) {
+        // Config saved by <= 0.6.2 has no notGp: keep its bits if they are for this round.
+        bool upgradedSameRound = (cfg.notifiedGpUtc == 0 && cfg.lastNotifiedRound == race.round);
+        if (!upgradedSameRound) {
+            // During the overlap window (post-race R(n) + countdown to R(n+1)), R(n) results
+            // are still in memory - keep NOTIFY_RESULT so they aren't re-sent for R(n+1).
+            DBG_INFO("[Telegram] New round (%d→%d), resetting notification bits",
+                     cfg.lastNotifiedRound, race.round);
+            cfg.notificationBits = (resultsAvailable && podiumCount > 0) ? NOTIFY_RESULT : 0;
+        }
+        cfg.notifiedGpUtc = race.gpTimeUtc;
         cfg.lastNotifiedRound = race.round;
-        cfg.notificationBits = (resultsAvailable && podiumCount > 0) ? NOTIFY_RESULT : 0;
+        saveConfig(cfg);
     }
 
     // Race week notification - fires once when we first enter the countdown window.
@@ -188,9 +244,8 @@ void checkNotifications(RaceData& race, AppConfig& cfg) {
     if (daysToFirst >= 0 && daysToFirst <= COUNTDOWN_WEEK_DAYS &&
         !(cfg.notificationBits & NOTIFY_RACE_WEEK)) {
         DBG_INFO("[Telegram] Sending race week notification: %s", race.name);
-        String msg = formatRaceWeekMessage(race);
-        if (sendTelegramMessage(cfg.chatId, msg)) {
-            cfg.notificationBits |= NOTIFY_RACE_WEEK;
+        if (sendTelegramMessage(cfg, formatRaceWeekMessage(race))) {
+            markNotified(cfg, NOTIFY_RACE_WEEK);
         }
     }
 
@@ -210,9 +265,8 @@ void checkNotifications(RaceData& race, AppConfig& cfg) {
 
         if (!(cfg.notificationBits & notifyBit)) {
             DBG_INFO("[Telegram] Sending pre-session notification: %s", s.label);
-            String msg = formatPreSessionMessage(s.label, race);
-            if (sendTelegramMessage(cfg.chatId, msg)) {
-                cfg.notificationBits |= notifyBit;
+            if (sendTelegramMessage(cfg, formatPreSessionMessage(s.label, race))) {
+                markNotified(cfg, notifyBit);
             }
         }
     }
@@ -225,9 +279,8 @@ void checkNotifications(RaceData& race, AppConfig& cfg) {
         RaceData& raceForResults = (now >= race.gpTimeUtc) ? race : getPrevRace();
         DBG_INFO("[Telegram] Sending race results notification for R%d (%s)",
                  raceForResults.round, raceForResults.name);
-        String msg = formatResultsMessage(raceForResults, podium, podiumCount);
-        if (sendTelegramMessage(cfg.chatId, msg)) {
-            cfg.notificationBits |= NOTIFY_RESULT;
+        if (sendTelegramMessage(cfg, formatResultsMessage(raceForResults, podium, podiumCount))) {
+            markNotified(cfg, NOTIFY_RESULT);
         }
     }
 }

@@ -8,10 +8,22 @@
 
 static Timezone myTZ;
 static bool _ntpSyncedOnce = false;  // True once a real NTP UDP response has been received
+static time_t _fallbackSyncStamp = 0;  // lastNtpUpdateTime() right after the fallback setTime()
 
 // Returns true if time has been confirmed by at least one successful NTP sync this session.
-// Used to guard LittleFS time saves so a stale fallback epoch isn't re-saved over a good one.
-bool ntpHasSynced() { return _ntpSyncedOnce; }
+// Used to guard LittleFS time saves and Telegram notifications against a stale fallback epoch.
+// ezTime's setTime() also stamps lastNtpUpdateTime(), so a real sync made later by ezTime's
+// background retries (events()) shows up as that stamp changing from the fallback value.
+bool ntpHasSynced() {
+    if (!_ntpSyncedOnce) {
+        time_t last = lastNtpUpdateTime();
+        if (last != 0 && last != _fallbackSyncStamp) {
+            _ntpSyncedOnce = true;
+            DBG_INFO("[Time] NTP synced after fallback boot. now()=%ld", (long)::now());
+        }
+    }
+    return _ntpSyncedOnce;
+}
 
 // Fill buf with the POSIX rule for a web UI timezone name. Returns false for
 // names not in the table (e.g. typed into the captive portal).
@@ -82,6 +94,7 @@ bool initTime(const char* tzString, const char* ntpServer) {
         time_t saved = loadLastKnownTime();
         if (saved > MIN_PLAUSIBLE_EPOCH) {
             setTime(saved);
+            _fallbackSyncStamp = lastNtpUpdateTime();
             DBG_WARN("[Time] Using saved time as fallback: %ld (~%d days stale)",
                      (long)saved, (int)((millis() / 1000) / 86400));
         } else {
@@ -100,10 +113,8 @@ void resyncNTP() {
     setInterval(1);  // Minimum interval — ezTime will query on next events() call
     events();        // Process immediately; UDP response may arrive on subsequent calls
     setInterval(3600);
-    // If sync succeeded synchronously, mark it
-    if (timeStatus() == timeSet && ::now() > MIN_PLAUSIBLE_EPOCH) {
-        _ntpSyncedOnce = true;
-    }
+    // No timeStatus() check here: the fallback setTime() also reports timeSet.
+    // ntpHasSynced() detects the real sync when it lands.
 }
 
 // Get current UTC time as time_t

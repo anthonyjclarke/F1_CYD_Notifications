@@ -73,6 +73,7 @@
 #define BRIGHTNESS_CHECK_MS     (10UL * 1000)            // 10 seconds
 #define WIFI_CHECK_MS           (30UL * 1000)            // WiFi reconnect check interval
 #define TIME_SAVE_MS            (15UL * 60 * 1000)       // Periodic time save to LittleFS
+#define TELEGRAM_TIMEOUT_MS     10000                    // Bot API reply timeout (one attempt per send)
 
 // --- Time Validation ---
 // Minimum plausible epoch: 2025-01-01 00:00:00 UTC.

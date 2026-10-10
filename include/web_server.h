@@ -258,13 +258,39 @@ async function setDbg() {
   } catch(e) {}
 }
 
+// Sends run on the device's main loop; poll until it reports the result
+async function waitTelegram(msg, okText, failText) {
+  msg.className = 'msg ok';
+  msg.textContent = 'Sending Telegram message\u2026';
+  for (let i = 0; i < 120; i++) {   // up to 30 s
+    await new Promise(r => setTimeout(r, 250));
+    try {
+      const st = await (await fetch('/api/telegram/status')).json();
+      if (!st.pending) {
+        const ok = st.lastResult === 1;
+        msg.className = ok ? 'msg ok' : 'msg err';
+        msg.textContent = ok ? okText : failText;
+        return;
+      }
+    } catch(_) {}
+  }
+  msg.className = 'msg err';
+  msg.textContent = 'Telegram: no result yet \u2013 check the device log';
+}
+
 async function telegramAction(action) {
   const msg = $('msg');
   try {
     const r = await fetch('/api/telegram/' + action, {method:'POST'});
     const d = await r.json();
-    msg.className = r.ok && d.sent ? 'msg ok' : 'msg err';
-    msg.textContent = d.message || (d.sent ? 'Telegram message sent' : 'Telegram send failed');
+    if (r.ok && d.queued) {
+      await waitTelegram(msg,
+        action === 'test' ? 'Telegram test sent' : 'Last Telegram message resent',
+        'Telegram send failed');
+    } else {
+      msg.className = 'msg err';
+      msg.textContent = d.message || 'Telegram send failed';
+    }
   } catch(e) {
     msg.className = 'msg err';
     msg.textContent = 'Telegram error: ' + e.message;
@@ -346,11 +372,13 @@ $('configForm').onsubmit = async (e) => {
     const r = await fetch('/api/config', {method:'POST', body});
     const d = await r.json().catch(() => ({}));
     msg.className   = r.ok ? 'msg ok'  : 'msg err';
-    if (r.ok && d.telegramConfigured && d.telegramChanged) {
-      msg.textContent = d.telegramTestSent ?
-        'Configuration saved. Telegram confirmation sent.' :
-        'Configuration saved. Telegram confirmation failed.';
-      if (!d.telegramTestSent) msg.className = 'msg err';
+    if (r.ok && d.telegramTestQueued) {
+      await waitTelegram(msg,
+        'Configuration saved. Telegram confirmation sent.',
+        'Configuration saved. Telegram confirmation failed.');
+    } else if (r.ok && d.telegramConfigured && d.telegramChanged) {
+      msg.className = 'msg err';
+      msg.textContent = 'Configuration saved. Telegram confirmation not sent (another send in progress).';
     } else {
       msg.textContent = r.ok ? 'Configuration saved!' : 'Save failed';
     }
@@ -535,6 +563,26 @@ setInterval(updateCountdowns, 1000);
 </html>
 )rawliteral";
 
+// Queue a Telegram request for loop() and reply 202, or 400 with reason / 409 if busy
+static void sendTelegramQueueResponse(AsyncWebServerRequest* request, bool allowed,
+                                      TelegramRequest req, const char* notAllowedMsg) {
+    JsonDocument doc;
+    int code;
+    if (!allowed) {
+        code = 400;
+        doc["message"] = notAllowedMsg;
+    } else if (!queueTelegramRequest(req)) {
+        code = 409;
+        doc["message"] = "A Telegram send is already in progress";
+    } else {
+        code = 202;
+        doc["queued"] = true;
+    }
+    String json;
+    serializeJson(doc, json);
+    request->send(code, "application/json", json);
+}
+
 void setupWebServer(AppConfig& cfg) {
     _webConfigPtr = &cfg;
 
@@ -609,20 +657,15 @@ void setupWebServer(AppConfig& cfg) {
         requestRedraw();
 
         saveConfig(*_webConfigPtr);
-        bool telegramTestSent = false;
-        if (telegramChanged && _webConfigPtr->telegramEnabled) {
-            initTelegram(_webConfigPtr->botToken);
-            telegramTestSent = sendTelegramConfigTest(*_webConfigPtr);
-        } else if (telegramChanged && !_webConfigPtr->telegramEnabled) {
-            initTelegram("");
-        }
+        // Confirmation message is sent from loop(); the page polls /api/telegram/status
+        bool telegramTestQueued = telegramChanged && _webConfigPtr->telegramEnabled &&
+                                  queueTelegramRequest(TG_REQ_TEST);
 
         JsonDocument resp;
         resp["ok"] = true;
         resp["telegramConfigured"] = _webConfigPtr->telegramEnabled;
         resp["telegramChanged"] = telegramChanged;
-        resp["telegramReady"] = telegramIsReady();
-        resp["telegramTestSent"] = telegramTestSent;
+        resp["telegramTestQueued"] = telegramTestQueued;
         String json;
         serializeJson(resp, json);
         request->send(200, "application/json", json);
@@ -635,35 +678,27 @@ void setupWebServer(AppConfig& cfg) {
         if (!_webConfigPtr) { request->send(500); return; }
         JsonDocument doc;
         doc["configured"] = _webConfigPtr->telegramEnabled;
-        doc["ready"] = telegramIsReady();
         doc["hasLastMessage"] = telegramHasLastMessage();
+        doc["pending"] = telegramRequestPending();
+        doc["lastResult"] = telegramLastResult;  // -1 none yet, 0 failed, 1 sent
         String json;
         serializeJson(doc, json);
         request->send(200, "application/json", json);
     });
 
-    // POST Telegram test message
+    // POST Telegram test message / resend the last successfully sent message.
+    // Queued for loop(); the page polls /api/telegram/status for the result.
     server.on("/api/telegram/test", HTTP_POST, [](AsyncWebServerRequest* request) {
         if (!_webConfigPtr) { request->send(500); return; }
-        bool sent = sendTelegramConfigTest(*_webConfigPtr);
-        JsonDocument doc;
-        doc["sent"] = sent;
-        doc["message"] = sent ? "Telegram test sent" : "Telegram test failed";
-        String json;
-        serializeJson(doc, json);
-        request->send(sent ? 200 : 400, "application/json", json);
+        sendTelegramQueueResponse(request, _webConfigPtr->telegramEnabled, TG_REQ_TEST,
+                                  "Telegram is not configured");
     });
 
-    // POST resend the last successfully sent Telegram message
     server.on("/api/telegram/resend", HTTP_POST, [](AsyncWebServerRequest* request) {
         if (!_webConfigPtr) { request->send(500); return; }
-        bool sent = resendLastTelegramMessage(*_webConfigPtr);
-        JsonDocument doc;
-        doc["sent"] = sent;
-        doc["message"] = sent ? "Last Telegram message resent" : "No saved Telegram message to resend, or send failed";
-        String json;
-        serializeJson(doc, json);
-        request->send(sent ? 200 : 400, "application/json", json);
+        sendTelegramQueueResponse(request,
+                                  _webConfigPtr->telegramEnabled && telegramHasLastMessage(),
+                                  TG_REQ_RESEND, "No saved Telegram message to resend");
     });
 
     // GET status

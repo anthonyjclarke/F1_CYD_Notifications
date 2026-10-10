@@ -1,6 +1,6 @@
 # Telegram Notification Setup Guide
 
-This guide explains how to configure Telegram notifications for this project (`F1 CYD Notifications`) using the `Universal-Arduino-Telegram-Bot` library.
+This guide explains how to configure Telegram notifications for this project (`F1 CYD Notifications`) by calling the Telegram Bot API `sendMessage` method directly over HTTPS.
 
 ## 1. What This Project Uses Telegram For
 
@@ -20,9 +20,7 @@ This project does **not** currently read inbound Telegram commands/messages.
 - Valid time sync (NTP) recommended
 - Telegram bot token and chat ID
 
-Library used:
-- `Universal-Arduino-Telegram-Bot`
-- Repo: https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
+Messages are sent with `parse_mode=Markdown`, one HTTPS POST per attempt. If Telegram rejects the Markdown (HTTP 400), the message is resent as plain text.
 
 ## 3. Create a Telegram Bot (BotFather)
 
@@ -75,7 +73,7 @@ Set:
 
 Then save.
 
-When Telegram credentials are changed in the Web UI, the firmware immediately re-initializes the bot and sends a confirmation message to the configured chat. The save banner reports whether that confirmation was sent.
+When Telegram credentials are changed in the Web UI, the firmware sends a confirmation message to the configured chat. Sends run on the device's main loop, so the save banner shows "Sending…" and then whether that confirmation was sent.
 
 The Config tab also includes:
 - `Test Telegram` - sends a fresh verification message using the saved token/chat ID.
@@ -137,7 +135,8 @@ Implemented notifications:
 - Results after post-race data is available
 
 Deduplication:
-- Per-round bitmask persisted in config to avoid duplicate sends.
+- Per-race bitmask saved to config straight after each send; it resets only when a later race becomes current.
+- Notifications wait until NTP has synced, so a stale clock after a reboot can't resolve an earlier race.
 
 ## 8. Known Behavior / Current Limitation
 
@@ -189,6 +188,5 @@ Check serial logs for `[Telegram]` lines and verify:
 
 ## 12. References
 
-- Library README: https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
 - Telegram Bot API: https://core.telegram.org/bots/api
 - BotFather: https://t.me/BotFather

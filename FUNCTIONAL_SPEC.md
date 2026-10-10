@@ -89,13 +89,14 @@ Notification types:
 
 Credential update behavior:
 - `POST /api/config` detects token/chat changes.
-- If both fields are configured, it immediately calls `initTelegram()` and attempts a confirmation test message.
+- If both fields are configured, it queues a confirmation test message, sent from `loop()`.
 - If Telegram is no longer configured, it clears the running bot instance.
 
 Deduplication/state:
-- Per-round bitmask (`notificationBits`) prevents duplicates.
-- Bitmask resets when round changes (`lastNotifiedRound` mismatch).
-- Notification bits are persisted to `/config.json`.
+- Per-race bitmask (`notificationBits`) prevents duplicates; each bit is saved to `/config.json` straight after its message is sent.
+- Bitmask belongs to the race whose GP time is `notifiedGpUtc` (`notGp`); it resets only when a later race becomes current.
+- No notifications are sent until NTP has synced (`ntpHasSynced()`).
+- Each send is one HTTPS POST with `parse_mode=Markdown`; an HTTP 400 is resent once as plain text.
 - The last successfully sent Telegram message is persisted separately at `/telegram_last.txt`.
 - `Resend Last` resends only that saved successful message; it does not reconstruct missed event notifications.
 
@@ -121,10 +122,10 @@ Endpoints:
 - `GET /` web UI.
 - `GET /logo.raw` RGB565 F1 logo bytes.
 - `GET /api/config` current config JSON.
-- `POST /api/config` update timezone, NTP, Telegram credentials, brightness; saves config; reapplies time/brightness; re-initializes Telegram and sends a confirmation message when credentials change.
-- `GET /api/telegram/status` Telegram configured/ready/last-message status.
-- `POST /api/telegram/test` send a Telegram verification message.
-- `POST /api/telegram/resend` resend the last successfully sent Telegram message.
+- `POST /api/config` update timezone, NTP, Telegram credentials, brightness; saves config; reapplies time/brightness; queues a Telegram confirmation message when credentials change (`telegramTestQueued`).
+- `GET /api/telegram/status` Telegram configured, saved last message, `pending` and `lastResult` (-1 none, 0 failed, 1 sent) of the queued web request.
+- `POST /api/telegram/test` queue a Telegram verification message (`202`).
+- `POST /api/telegram/resend` queue a resend of the last successfully sent Telegram message (`202`).
 - `GET /api/status` heap, uptime, IP.
 - `GET /api/schedule` current race sessions with local day/time and UTC.
 - `GET /api/races` compact upcoming season list.
@@ -159,7 +160,7 @@ Endpoints:
 
 ### 3.2 Software Stack
 - Framework: Arduino (PlatformIO).
-- Key libraries: TFT_eSPI, ArduinoJson, WiFiManager, UniversalTelegramBot, ESPAsyncWebServer, AsyncTCP, ElegantOTA, ezTime.
+- Key libraries: TFT_eSPI, ArduinoJson, WiFiManager, ESPAsyncWebServer, AsyncTCP, ElegantOTA, ezTime (Telegram via `HTTPClient`).
 
 ### 3.3 Runtime Cadence and Timing
 - NTP maintenance: `events()` each loop; ezTime resync every 1h.

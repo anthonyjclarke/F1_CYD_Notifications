@@ -78,6 +78,7 @@ struct AppConfig {
     uint8_t brightness;           // 0=auto, 1-255=manual
     uint8_t lastNotifiedRound;
     uint8_t notificationBits;     // Bitmask of sent notifications for current round
+    time_t notifiedGpUtc;         // GP time of the race notificationBits belong to
     bool telegramEnabled;
 };
 
@@ -90,5 +91,6 @@ inline void setDefaultConfig(AppConfig& cfg) {
     cfg.brightness = 128;
     cfg.lastNotifiedRound = 0;
     cfg.notificationBits = 0;
+    cfg.notifiedGpUtc = 0;
     cfg.telegramEnabled = false;
 }

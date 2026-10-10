@@ -125,8 +125,6 @@ void checkResultsPolling() {
         if (fetchPostRaceDataWithStatus(raceForResults.round)) {
             resultsPollActive = false;
             requestRedraw();
-            // Save notification config (results bit will be set by checkNotifications)
-            saveConfig(appConfig);
         }
     }
 }
@@ -284,11 +282,8 @@ void setup() {
     }
 #endif
 
-    // 10. Init Telegram
+    // 10. Telegram (stateless HTTPS sends - nothing to initialise)
     DBG_INFO("[Main] 10/12 Telegram: %s", appConfig.telegramEnabled ? "enabled" : "disabled");
-    if (appConfig.telegramEnabled) {
-        initTelegram(appConfig.botToken);
-    }
 
     // 11. Start web server + OTA
     DBG_INFO("[Main] 11/12 Starting web server");
@@ -333,13 +328,14 @@ void loop() {
 
     // Periodic tasks (all non-blocking, millis-based)
 
-    // Notification check - every minute
+    // Notification check - every minute (saves config itself when a bit changes)
     if (millis() - lastNotificationChk >= NOTIFICATION_CHECK_MS) {
         lastNotificationChk = millis();
         checkNotifications(getCurrentRace(), appConfig);
-        // Save notification bits if changed
-        saveConfig(appConfig);
     }
+
+    // Web UI Telegram Test / Resend, queued by the web server
+    handleTelegramRequests(appConfig);
 
     // Post-race results polling
     checkResultsPolling();

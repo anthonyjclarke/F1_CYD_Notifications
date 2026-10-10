@@ -29,7 +29,6 @@ F1 race schedule display and Telegram notification system for ESP32-2432S028R. F
 - TFT_eSPI 2.5.43 (configured via `build_flags` in platformio.ini; no User_Setup.h)
 - ArduinoJson 7.4.0
 - WiFiManager (git)
-- Universal-Arduino-Telegram-Bot (git)
 - ESPAsyncWebServer 3.6.2 / AsyncTCP 3.3.3
 - ElegantOTA 3.1.6
 - ezTime 0.8.3
@@ -57,8 +56,8 @@ F1 race schedule display and Telegram notification system for ESP32-2432S028R. F
 - **Screenshot** (HSPI @ 8 MHz): `tft.readRect()` in 16-row chunks, BMP written bottom-up with byte-swap. Request-queue model; web/button queues, main loop executes. Filenames: `/shots/shot_YYYYMMDD_HHMMSS.bmp` (user TZ after sync) or `/shots/shot_unsynced_XXXXXX.bmp` before sync. Polls `/api/screenshot/status` (250 ms, 10s max) until `busy` clears.
 - **PROGMEM image transparency gotcha**: TFT_eSPI `pushImage` with transparency key on ESP32 SPI is unreliable. For images on black background, set pixels to `0x0000`, call `pushImage` without transparency key, and `fillRect(COLOR_BG)` before to clear region.
 - **Non-blocking timing**: All periodic tasks use `millis()` — no `delay()` in loop.
-- **Notification deduplication**: Per-round bitmask persisted to LittleFS.
-- **Telegram config validation**: Web UI `POST /api/config` detects token/chat changes, re-initializes the bot immediately, and sends a confirmation message when both fields are present. `POST /api/telegram/test` sends a fresh verification message; `POST /api/telegram/resend` resends `/telegram_last.txt`.
+- **Notification deduplication**: Bitmask persisted to `/config.json` right after each send, tied to the race's GP time (`notGp`); reset only when a *later* race becomes current, and skipped until `ntpHasSynced()`.
+- **Telegram sends**: One `HTTPClient` POST per attempt – never use UniversalTelegramBot (its 8 s re-POST loop caused duplicate messages). Web UI Test/Resend/confirmation only queue a request; `loop()` sends via `handleTelegramRequests()`. Never send from an AsyncTCP handler. Messages use `parse_mode=Markdown`; a 400 is resent as plain text.
 
 ## Web installer and releases
 - Release images come only from CI on a `v*` tag on `main`; never publish a local build or `_site/` (`docs/WEB_INSTALLER.md`).

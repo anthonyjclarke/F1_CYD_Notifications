@@ -67,7 +67,6 @@ Pins and display constants are defined in [include/config.h](./include/config.h)
 - [`TFT_eSPI`](https://github.com/Bodmer/TFT_eSPI)
 - [`ArduinoJson`](https://github.com/bblanchon/ArduinoJson)
 - [`WiFiManager`](https://github.com/tzapu/WiFiManager)
-- [`UniversalTelegramBot`](https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot)
 - [`ESPAsyncWebServer`](https://github.com/mathieucarbou/ESPAsyncWebServer) + [`AsyncTCP`](https://github.com/mathieucarbou/AsyncTCP)
 - [`ElegantOTA`](https://github.com/ayushsharma82/ElegantOTA)
 - [`ezTime`](https://github.com/ropg/ezTime)
@@ -226,7 +225,7 @@ Touch input manually advances to the next state in the active phase.
 
 Enabled when both bot token and chat ID are configured (see details in [TELEGRAM_SETUP.md](./TELEGRAM_SETUP.md)).
 
-When Telegram credentials are changed in the Web UI, the firmware re-initializes the bot immediately and sends a confirmation message to the configured chat. The Config tab also provides:
+When Telegram credentials are changed in the Web UI, the firmware sends a confirmation message to the configured chat straight away. The Config tab also provides:
 
 - **Test Telegram**: sends a verification message using the saved token/chat ID.
 - **Resend Last**: resends the last Telegram message that was successfully delivered and saved on LittleFS.
@@ -241,7 +240,7 @@ Notification types:
   - Race
 - Race result notification after data becomes available
 
-Duplicate suppression is handled with per-round bitmask persistence in config. The resend cache is stored separately at `/telegram_last.txt`; it can survive reboot, but it only contains a message that previously sent successfully.
+Each notification is sent once per race: a bitmask saved to config right after each send, reset only when a later race becomes current, with sends paused until NTP has synced. The resend cache is stored separately at `/telegram_last.txt`; it can survive reboot, but it only contains a message that previously sent successfully.
 
 ## Web UI
 
