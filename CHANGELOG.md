@@ -17,7 +17,7 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ## [Unreleased]
 
-## [0.8.0] Unreleased
+## [0.8.0] 26-10-2026
 
 ### Added
 - Boot screen shows "WiFi connected" and the device IP address (held for `IP_DISPLAY_MS`, 4 s) after WiFi connects; the IP stays visible through the remaining boot status messages.
