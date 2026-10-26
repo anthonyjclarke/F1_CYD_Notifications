@@ -259,6 +259,11 @@ void setup() {
     DBG_INFO("[Main] 7/12 Starting WiFi");
     setupWiFi(appConfig);
     setLED(false, true, false);  // Green = connected
+    drawIPAddress(WiFi.localIP().toString().c_str());
+#if SCREENSHOT_STARTUP_CAPTURES
+    captureScreenshotNow("boot_wifi_ip");
+#endif
+    delay(IP_DISPLAY_MS);  // One-off boot hold (setup only) so the IP can be read
 
     // 8. Sync NTP time
     DBG_INFO("[Main] 8/12 Syncing NTP time (TZ: %s)", appConfig.timezone);

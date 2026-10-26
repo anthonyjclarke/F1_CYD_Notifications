@@ -18,16 +18,16 @@ static RaceData races[MAX_RACES];       // prev, current, next
 static uint8_t currentRaceIdx = 1;      // Index into races[] for current/next race
 static uint8_t totalRacesLoaded = 0;
 
-// --- Compact upcoming race list (all future rounds, populated by parseSchedule) ---
-struct UpcomingRace {
+// --- Compact full-season race list (all rounds, past and future, populated by parseSchedule) ---
+struct SeasonRace {
     uint8_t  round;
     bool     isSprint;
     char     name[24];
     char     location[16];
     time_t   gpTimeUtc;
 };
-static UpcomingRace upcomingRaces[25];
-static uint8_t upcomingCount = 0;
+static SeasonRace seasonRaces[25];
+static uint8_t seasonCount = 0;
 
 // --- Post-race data ---
 static RaceResult podium[MAX_PODIUM];
@@ -249,21 +249,21 @@ bool parseSchedule(const String& json) {
         DBG_INFO("[F1] Next race GP (local): %s", nextGP);
     }
 
-    // Populate compact upcoming-races list (all rounds from current onward)
-    upcomingCount = 0;
-    for (int i = nextIdx; i < (int)racesArr.size() && upcomingCount < 25; i++) {
+    // Populate compact full-season list (completed rounds included for the web UI calendar)
+    seasonCount = 0;
+    for (int i = 0; i < (int)racesArr.size() && seasonCount < 25; i++) {
         JsonObject r = racesArr[i];
-        UpcomingRace& ur = upcomingRaces[upcomingCount];
+        SeasonRace& ur = seasonRaces[seasonCount];
         ur.round    = r["round"] | 0;
         JsonObjectConst upcomingSessions = r["sessions"].as<JsonObjectConst>();
         ur.isSprint = !upcomingSessions["sprint"].isNull();
         strlcpy(ur.name,     r["name"]     | "Unknown", sizeof(ur.name));
         strlcpy(ur.location, r["location"] | "",        sizeof(ur.location));
         ur.gpTimeUtc = parseISO8601(upcomingSessions["gp"]);
-        upcomingCount++;
+        seasonCount++;
     }
-    DBG_INFO("[F1] Upcoming races: %d (from R%d to end of season)", upcomingCount,
-             upcomingCount > 0 ? upcomingRaces[0].round : 0);
+    DBG_INFO("[F1] Season races: %d (next: R%d)", seasonCount,
+             racesArr[nextIdx]["round"].as<int>());
     return true;
 }
 
