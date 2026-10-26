@@ -556,6 +556,20 @@ void drawStatusMessage(const char* msg, int yOffset = 28) {
     tft.drawString(msg, SCREEN_WIDTH / 2, y);
 }
 
+// --- WiFi connected: show IP on boot screen ---
+// Status line reads "WiFi connected"; IP sits below it in large text and stays
+// visible through the remaining boot status messages until the first main screen.
+void drawIPAddress(const char* ip) {
+    drawStatusMessage("WiFi connected - Web UI:");
+    tft.setFreeFont(&FreeSansBold12pt7b);
+    int fh = tft.fontHeight();
+    constexpr int y = 182;
+    tft.fillRect(0, y - fh / 2 - 2, SCREEN_WIDTH, fh + 4, COLOR_BG);
+    tft.setTextColor(COLOR_HIGHLIGHT);
+    tft.setTextDatum(MC_DATUM);
+    tft.drawString(ip, SCREEN_WIDTH / 2, y);
+}
+
 // --- Update brightness from config or LDR ---
 
 void updateBrightness(uint8_t configBrightness) {

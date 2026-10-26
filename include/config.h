@@ -9,7 +9,7 @@
 // #define, not constexpr: display_renderer.h formats it with "%s" and the
 // tooling reads either form. PROJECT_NAME is frozen - Improv reports it and
 // ESP Web Tools offers "Update" only when it matches the manifest name.
-#define FIRMWARE_VERSION    "0.7.0"
+#define FIRMWARE_VERSION    "0.8.0-dev"
 #define PROJECT_NAME        "F1_CYD_Notifications"
 #define PROJECT_REPO_URL    "https://github.com/anthonyjclarke/F1_CYD_Notifications"
 #define BOARD_NAME          "ESP32-2432S028R (CYD 2.8\u2033)"   // web UI diagnostics
@@ -44,6 +44,7 @@
 #define WIFI_AP_NAME        AP_NAME
 #define WIFI_AP_PASSWORD    ""
 #define WIFI_TIMEOUT_SEC    0
+#define IP_DISPLAY_MS       4000  // Hold IP address on boot screen after WiFi connects
 
 // --- Improv-Serial (web installer: WiFi setup + "Update" detection) ---
 #define IMPROV_SETUP_ENABLED   1

@@ -83,10 +83,10 @@ static CountdownTarget getCountdownTarget(RaceData& race) {
     }
 
     // No future sessions in current race - check upcoming races
-    for (uint8_t i = 0; i < upcomingCount; i++) {
-        if (upcomingRaces[i].gpTimeUtc > now) {
+    for (uint8_t i = 0; i < seasonCount; i++) {
+        if (seasonRaces[i].gpTimeUtc > now) {
             // For upcoming races, return the GP time as the target
-            return {upcomingRaces[i].gpTimeUtc, SESSION_GP};
+            return {seasonRaces[i].gpTimeUtc, SESSION_GP};
         }
     }
 

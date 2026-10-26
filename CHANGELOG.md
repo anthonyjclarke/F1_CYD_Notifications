@@ -17,6 +17,15 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ## [Unreleased]
 
+## [0.8.0] Unreleased
+
+### Added
+- Boot screen shows "WiFi connected" and the device IP address (held for `IP_DISPLAY_MS`, 4 s) after WiFi connects; the IP stays visible through the remaining boot status messages.
+- Web UI **Completed races** panel below the Calendar: same columns plus race winner, linked to the full race results (Wikipedia). Winners are fetched by the browser directly from the Jolpica API.
+
+### Changed
+- `upcomingRaces[]` renamed `seasonRaces[]` and now holds every round of the season; `/api/races` returns past and future races. The Calendar lists only upcoming races.
+
 ## [0.7.0] 11-10-2026
 
 ### Added

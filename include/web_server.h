@@ -88,7 +88,6 @@ td.cd{font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
 .s-sprint td:first-child{color:#94650a;font-weight:650}
 .r-cur td{font-weight:650}
 .r-cur td:first-child{box-shadow:inset 3px 0 var(--brand)}
-.r-done td{color:#a9adb0}
 .pill{display:inline-block;background:#fff3cd;color:#7a5a00;font-size:10.5px;font-weight:700;letter-spacing:.5px;padding:1px 7px;border-radius:999px;margin-left:8px;vertical-align:2px}
 .post-race{border-left:4px solid var(--brand)}
 .p-row{display:flex;align-items:baseline;gap:12px;padding:8px 0;border-bottom:1px solid var(--rule);font-size:14px}
@@ -173,6 +172,16 @@ footer a{color:var(--muted)}
     <tbody id="seasonBody"><tr><td colspan="4" class="muted">Loading&hellip;</td></tr></tbody>
   </table></div>
   <p class="footnote">Dates are in this browser's timezone.</p>
+</section>
+
+<section class="panel">
+  <p class="eyebrow">2026 season</p>
+  <h2>Completed races</h2>
+  <div class="table-wrap"><table id="doneTable">
+    <thead><tr><th>Rd</th><th>Grand Prix</th><th>Location</th><th>Date</th><th>Winner</th></tr></thead>
+    <tbody id="doneBody"><tr><td colspan="5" class="muted">Loading&hellip;</td></tr></tbody>
+  </table></div>
+  <p class="footnote">Winners from the Jolpica F1 API; each links to the full race results.</p>
 </section>
 </div>
 
@@ -648,33 +657,80 @@ function fmtGpDate(utcSec) {
     {weekday:'short', day:'numeric', month:'short'});
 }
 
+// Winners for completed rounds, fetched by the browser straight from Jolpica (CORS-enabled)
+// so the device makes no extra HTTPS request. Keyed by round -> {name, url}.
+async function loadWinners() {
+  const r = await fetch('https://api.jolpi.ca/ergast/f1/2026/results/1.json?limit=30');
+  const d = await r.json();
+  const w = {};
+  (d.MRData.RaceTable.Races || []).forEach(race => {
+    const res = race.Results && race.Results[0];
+    if (res) w[race.round] = {
+      name: res.Driver.givenName + ' ' + res.Driver.familyName,
+      url: race.url
+    };
+  });
+  return w;
+}
+
+function raceCells(race) {
+  const badge = race.isSprint ? '<span class="pill">SPRINT</span>' : '';
+  return '<td>' + race.round + '</td>' +
+    '<td>' + race.name + badge + '</td>' +
+    '<td>' + race.location + '</td>' +
+    '<td style="white-space:nowrap">' + fmtGpDate(race.gp) + '</td>';
+}
+
 async function loadRaces() {
   try {
     const r = await fetch('/api/races');
     const d = await r.json();
     const races = d.races || [];
     const now = Math.floor(Date.now() / 1000);
+    const upcoming = races.filter(x => x.gp >= now);
+    const done = races.filter(x => x.gp < now).reverse();  // Most recent first
+
     const tb = $('seasonBody');
     tb.innerHTML = '';
-    races.forEach((race, i) => {
-      const done = race.gp < now;
-      const cur  = i === 0 && !done;
-      const cls  = done ? 'r-done' : cur ? 'r-cur' : '';
-      const row  = document.createElement('tr');
-      if (cls) row.className = cls;
-      const badge = race.isSprint ? '<span class="pill">SPRINT</span>' : '';
-      row.innerHTML = '<td>' + race.round + '</td>' +
-        '<td>' + race.name + badge + '</td>' +
-        '<td>' + race.location + '</td>' +
-        '<td style="white-space:nowrap">' + fmtGpDate(race.gp) + '</td>';
+    upcoming.forEach((race, i) => {
+      const row = document.createElement('tr');
+      if (i === 0) row.className = 'r-cur';
+      row.innerHTML = raceCells(race);
       tb.appendChild(row);
     });
-    const left = races.filter(x => x.gp > now).length;
+    if (!upcoming.length) tb.innerHTML = '<tr><td colspan="4" class="muted">Season complete</td></tr>';
     const last = races[races.length - 1];
-    $('cSeason').textContent    = left ? left + (left === 1 ? ' race' : ' races') + ' left' : 'Complete';
+    $('cSeason').textContent    = upcoming.length ? upcoming.length + (upcoming.length === 1 ? ' race' : ' races') + ' left' : 'Complete';
     $('cSeasonSub').textContent = last ? 'Finale: ' + last.name + ' · ' + fmtGpDate(last.gp) : '';
+
+    const db = $('doneBody');
+    db.innerHTML = '';
+    if (!done.length) {
+      db.innerHTML = '<tr><td colspan="5" class="muted">No races completed yet</td></tr>';
+      return;
+    }
+    const cells = {};
+    done.forEach(race => {
+      const row = document.createElement('tr');
+      row.innerHTML = raceCells(race) + '<td class="muted">&hellip;</td>';
+      db.appendChild(row);
+      cells[race.round] = row.lastElementChild;
+    });
+    let winners = null;
+    try { winners = await loadWinners(); } catch(_) {}
+    done.forEach(race => {
+      const cell = cells[race.round];
+      const w = winners && winners[race.round];
+      if (w) {
+        cell.className = '';
+        cell.innerHTML = '<a href="' + w.url + '" target="_blank" rel="noopener" title="Full race results">' + w.name + ' &#8599;</a>';
+      } else {
+        cell.textContent = winners ? 'Pending' : '\u2013';
+      }
+    });
   } catch(e) {
     $('seasonBody').innerHTML = '<tr><td colspan="4" class="muted">Load failed</td></tr>';
+    $('doneBody').innerHTML = '<tr><td colspan="5" class="muted">Load failed</td></tr>';
   }
 }
 
@@ -1024,17 +1080,17 @@ void setupWebServer(AppConfig& cfg) {
         request->send(200, "application/json", json);
     });
 
-    // GET all upcoming races (compact, for season calendar)
+    // GET all season races, past and future (compact, for season calendar)
     server.on("/api/races", HTTP_GET, [](AsyncWebServerRequest* request) {
         JsonDocument doc;
         JsonArray arr = doc["races"].to<JsonArray>();
-        for (uint8_t i = 0; i < upcomingCount; i++) {
+        for (uint8_t i = 0; i < seasonCount; i++) {
             JsonObject r = arr.add<JsonObject>();
-            r["round"]    = upcomingRaces[i].round;
-            r["name"]     = upcomingRaces[i].name;
-            r["location"] = upcomingRaces[i].location;
-            r["isSprint"] = upcomingRaces[i].isSprint;
-            r["gp"]       = (long)upcomingRaces[i].gpTimeUtc;
+            r["round"]    = seasonRaces[i].round;
+            r["name"]     = seasonRaces[i].name;
+            r["location"] = seasonRaces[i].location;
+            r["isSprint"] = seasonRaces[i].isSprint;
+            r["gp"]       = (long)seasonRaces[i].gpTimeUtc;
         }
         String json;
         serializeJson(doc, json);
