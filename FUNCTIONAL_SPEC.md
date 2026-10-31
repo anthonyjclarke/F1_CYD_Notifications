@@ -49,7 +49,7 @@ Session modeling:
 Display phases:
 - `IDLE`: outside race week, shows countdown to first session.
 - `RACE_WEEK_*`: starts when first session is within 7 days.
-- `POST_RACE_*`: starts after GP time and lasts up to `POST_RACE_DAYS` days.
+- `POST_RACE_*`: starts at the nominal GP finish (start + 2 hours); expires `POST_RACE_DAYS` days after GP start.
 
 Display states:
 - Countdown
@@ -64,7 +64,8 @@ Rotation behavior:
 - Race week states rotate every 8s.
 - Post-race states rotate every 10s.
 - Countdown digits refresh every 1s with partial redraw to reduce flicker.
-- During active F1 sessions (FP1, FP2, FP3, Qualifying, Sprint Qualifying, Sprint, Race), countdown automatically switches to "On Now" display with F1 racing car image.
+- During active F1 sessions (FP1, FP2, FP3, Qualifying, Sprint Qualifying, Sprint, Race), countdown automatically switches to the "On Now" display. A 70 × 28 car accelerates left to right with trailing smoke, then advances to event details after `ON_NOW_ANIMATION_MS` (4.2 seconds). It repeats on the next live-countdown visit. Frames are serviced by the main loop at up to 25 fps, without animation delays or heap allocation; synchronous network jobs can still pause rendering.
+- Running-session detection covers sessions crossing local midnight. Touch and phase changes cancel an in-progress animation; redraws preserve its elapsed time.
 - Touch press manually advances to next state in current phase.
 - If previous-race results are available during race week, race-week rotation includes winner, driver standings, and constructor standings screens after the standard countdown/event/schedule screens.
 

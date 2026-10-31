@@ -57,20 +57,15 @@ static CountdownTarget getCountdownTarget(RaceData& race) {
         time_t sessionTime = race.sessions[i].utcTime;
         SessionType sessionType = race.sessions[i].type;
 
-        // If this session is on today's date
-        if (isSameLocalDay(now, sessionTime)) {
-            // Check if session is currently running
-            uint16_t durationSecs = getSessionDurationSeconds(sessionType);
-            time_t sessionEndTime = sessionTime + durationSecs;
+        // A running session remains live even if it crosses local midnight.
+        if (sessionTime > 0 && now >= sessionTime &&
+            now < sessionTime + getSessionDurationSeconds(sessionType)) {
+            return {sessionTime, sessionType};
+        }
 
-            if (now >= sessionTime && now < sessionEndTime) {
-                // Session is currently running - return it
-                return {sessionTime, sessionType};
-            } else if (sessionTime > now) {
-                // Session hasn't started yet - return it
-                return {sessionTime, sessionType};
-            }
-            // Session has ended - continue looking for other sessions today
+        // Otherwise select the next session on today's local date.
+        if (sessionTime > now && isSameLocalDay(now, sessionTime)) {
+            return {sessionTime, sessionType};
         }
     }
 
@@ -108,7 +103,8 @@ DisplayState determinePhase(RaceData& race) {
     int daysToFirst = daysUntilLocalDate(race.firstSessionUtc);
     int daysAfterGP = secsAfterGP / 86400;
 
-    if (secsAfterGP >= 0 && daysAfterGP < POST_RACE_DAYS) {
+    if (race.gpTimeUtc > 0 && now >= gpFinishedUtc(race.gpTimeUtc) &&
+        daysAfterGP < POST_RACE_DAYS) {
         // Post-race window
         return STATE_POST_RACE_WINNER;
     } else if (daysToFirst >= 0 && daysToFirst <= COUNTDOWN_WEEK_DAYS) {
@@ -124,6 +120,7 @@ DisplayState determinePhase(RaceData& race) {
 // Advance to next display state within the current phase
 void advanceDisplayState(DisplayState phase) {
     DisplayState prev = currentDisplayState;
+    raceAnimation.stop();
 
     switch (phase) {
         case STATE_RACE_WEEK_COUNTDOWN:
@@ -172,6 +169,7 @@ void advanceDisplayState(DisplayState phase) {
 
     DBG_INFO("[Display] Screen change: %s → %s", stateName(prev), stateName(currentDisplayState));
     displayNeedsRedraw = true;
+    displayPartialUpdate = false;
 }
 
 // Render the current display state.
@@ -256,9 +254,11 @@ void updateDisplay(RaceData& race) {
     }
 
     if (phaseChanged) {
+        raceAnimation.stop();
         DBG_INFO("[Display] Phase change: %s → %s", stateName(currentDisplayState), stateName(phase));
         currentDisplayState = phase;
         displayNeedsRedraw = true;
+        displayPartialUpdate = false;
         lastDisplayChange = millis();
     }
 
@@ -277,13 +277,21 @@ void updateDisplay(RaceData& race) {
     }
 
     // Rotate between screens
-    if (currentDisplayState != STATE_IDLE &&
+    if (!raceAnimation.isActive() && currentDisplayState != STATE_IDLE &&
         millis() - lastDisplayChange >= rotateInterval) {
         lastDisplayChange = millis();
         advanceDisplayState(phase);
     }
 
     renderCurrentState(race, phase);
+
+    // Animation owns the live countdown's duration. Service one frame per loop
+    // pass, then render the next screen immediately after the complete pass.
+    if (raceAnimation.update(tft, millis())) {
+        lastDisplayChange = millis();
+        advanceDisplayState(phase);
+        renderCurrentState(race, phase);
+    }
 }
 
 // Manual advance (touch input)

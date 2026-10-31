@@ -1102,7 +1102,7 @@ void setupWebServer(AppConfig& cfg) {
 
         // Detect post-race window
         bool inPostRace = (race.gpTimeUtc > 0 &&
-                           now >= race.gpTimeUtc &&
+                           now >= gpFinishedUtc(race.gpTimeUtc) &&
                            (now - race.gpTimeUtc) < (POST_RACE_DAYS * 86400L));
 
         JsonDocument doc;

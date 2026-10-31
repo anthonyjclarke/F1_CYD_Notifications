@@ -19,6 +19,18 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ## [0.10.0] Unreleased
 
+### Added
+
+- Live-session countdown animation: a smaller 70 × 28 car accelerates across the screen with trailing smoke, then advances after a 4.2-second pass. Timing is configurable in `include/config.h`.
+- Project guidance in `AGENTS.md`, a source review in `docs/CODE_ANALYSIS.md`, and host display regression checks in `tests/host/`.
+
+### Fixed
+
+- Post-race display and web schedule classification now start at the nominal GP finish, allowing the live GP animation to appear during the race.
+- Sessions crossing local midnight remain eligible for the live countdown. Screen changes clear partial-redraw state and cancel any running animation.
+
+---
+
 ## [0.9.0] 01-11-2026
 
 ### Added

@@ -175,7 +175,8 @@ void checkPostRaceExpiry() {
 
     long secsAfterGP = (long)(nowUTC() - race.gpTimeUtc);
     int daysAfterGP = (int)(secsAfterGP / 86400);
-    bool inPostRace = (secsAfterGP >= 0 && daysAfterGP < POST_RACE_DAYS);
+    bool inPostRace = (race.gpTimeUtc > 0 && nowUTC() >= gpFinishedUtc(race.gpTimeUtc) &&
+                       daysAfterGP < POST_RACE_DAYS);
 
     if (wasInPostRace && !inPostRace) {
         DBG_INFO("[Main] Post-race window ended — refreshing schedule for next race");

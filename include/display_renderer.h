@@ -5,9 +5,10 @@
 #include "types.h"
 #include "time_utils.h"
 #include "f1_logo.h"
-#include "f1_race_car.h"
+#include "race_animation.h"
 
 static TFT_eSPI tft = TFT_eSPI();
+static RaceAnimation raceAnimation;
 
 // --- Initialization ---
 
@@ -170,6 +171,7 @@ void drawCountdown(RaceData& race, Countdown& cd, bool partialUpdate = false) {
 
     // --- Handle "On Now" state ---
     if (cd.isOnNow) {
+        if (!raceAnimation.isActive()) raceAnimation.start(millis());
         if (!partialUpdate) {
             tft.fillScreen(COLOR_BG);
 
@@ -185,26 +187,20 @@ void drawCountdown(RaceData& race, Countdown& cd, bool partialUpdate = false) {
             tft.setFreeFont(&FreeSans9pt7b);
             tft.setTextColor(COLOR_SESSION_TEXT);
             tft.drawString(race.location, SCREEN_WIDTH / 2, 66);
+
+            tft.setFreeFont(&FreeMonoBold24pt7b);
+            tft.setTextColor(COLOR_F1_RED);
+            tft.setTextDatum(MC_DATUM);
+            tft.drawString("ON", SCREEN_WIDTH / 2, 180);
+
+            tft.setFreeFont(&FreeSans9pt7b);
+            tft.setTextColor(COLOR_TEXT);
+            tft.drawString("NOW!", SCREEN_WIDTH / 2, 210);
         }
-
-        // Display race car image
-        constexpr int16_t carX = (SCREEN_WIDTH - F1_CAR_WIDTH) / 2;
-        constexpr int16_t carY = 100;
-        tft.fillRect(0, carY - 10, SCREEN_WIDTH, F1_CAR_HEIGHT + 20, COLOR_BG);
-        tft.pushImage(carX, carY, F1_CAR_WIDTH, F1_CAR_HEIGHT, f1_race_car);
-
-        // "On Now" text
-        tft.setFreeFont(&FreeMonoBold24pt7b);
-        tft.setTextColor(COLOR_F1_RED);
-        tft.setTextDatum(MC_DATUM);
-        tft.drawString("ON", SCREEN_WIDTH / 2, 180);
-
-        tft.setFreeFont(&FreeSans9pt7b);
-        tft.setTextColor(COLOR_TEXT);
-        tft.drawString("NOW!", SCREEN_WIDTH / 2, 210);
 
         return;
     }
+    raceAnimation.stop();
 
     // --- Full redraw: background + all static elements ---
     if (!partialUpdate) {

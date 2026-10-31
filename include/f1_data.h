@@ -214,7 +214,7 @@ bool parseSchedule(const String& json) {
 
     // Determine if races[1] is in its post-race window (helps label the log correctly)
     bool r1InPostRace = (races[1].gpTimeUtc > 0 &&
-                         now >= races[1].gpTimeUtc &&
+                         now >= gpFinishedUtc(races[1].gpTimeUtc) &&
                          (now - races[1].gpTimeUtc) < (POST_RACE_DAYS * 86400L));
 
     DBG_INFO("[F1] Loaded %d races. %s: R%d %s (%s)",

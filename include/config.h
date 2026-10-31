@@ -72,6 +72,8 @@
 #define DISPLAY_ROTATE_MS       8000                     // Screen rotation
 #define POST_RACE_ROTATE_MS     10000                    // Post-race rotation
 #define COUNTDOWN_UPDATE_MS     1000                     // 1 second
+#define ON_NOW_ANIMATION_MS     4200UL                   // One car + smoke pass, then advance
+#define ON_NOW_FRAME_MS         40UL                     // Up to 25 animation frames/second
 #define NOTIFICATION_CHECK_MS   (60UL * 1000)            // 1 minute
 #define BRIGHTNESS_CHECK_MS     (10UL * 1000)            // 10 seconds
 #define WIFI_CHECK_MS           (30UL * 1000)            // WiFi reconnect check interval
