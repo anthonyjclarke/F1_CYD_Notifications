@@ -45,6 +45,7 @@
 #define WIFI_AP_PASSWORD    ""
 #define WIFI_TIMEOUT_SEC    0
 #define IP_DISPLAY_MS       4000  // Hold IP address on boot screen after WiFi connects
+#define MDNS_HOSTNAME       "f1"  // Web UI at http://f1.local; also the DHCP hostname (lowercase, no dots)
 
 // --- Improv-Serial (web installer: WiFi setup + "Update" detection) ---
 #define IMPROV_SETUP_ENABLED   1

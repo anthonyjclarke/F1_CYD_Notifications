@@ -22,6 +22,9 @@ Version scheme: `MAJOR.MINOR.PATCH`
 ### Added
 - Web UI **Driver standings** and **Constructor standings** tabs in the 2026 season panel (position, driver/team, wins, points), fetched by the browser directly from the Jolpica API and refreshed with the Refresh button.
 
+- Web UI reachable at `http://f1.local` (mDNS). The device also sets `f1` as its DHCP hostname, so routers that publish DHCP names list it as `f1` instead of `esp32-xxxxxx`. Name set by `MDNS_HOSTNAME` in `config.h`.
+- Boot screen shows the `f1.local` name above the IP address.
+
 ### Changed
 - The 2026 season Calendar and Completed races panels are now tabs in a single panel.
 
