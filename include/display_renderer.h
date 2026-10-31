@@ -557,10 +557,10 @@ void drawStatusMessage(const char* msg, int yOffset = 28) {
 }
 
 // --- WiFi connected: show IP on boot screen ---
-// Status line reads "WiFi connected"; IP sits below it in large text and stays
+// Status line gives the mDNS name ("Web UI: f1.local or"); IP sits below it in large text and stays
 // visible through the remaining boot status messages until the first main screen.
 void drawIPAddress(const char* ip) {
-    drawStatusMessage("WiFi connected - Web UI:");
+    drawStatusMessage("Web UI: " MDNS_HOSTNAME ".local or");
     tft.setFreeFont(&FreeSansBold12pt7b);
     int fh = tft.fontHeight();
     constexpr int y = 182;

@@ -117,6 +117,7 @@ Fetched post-race datasets:
 ### 2.7 Web UI and HTTP API
 Server:
 - Async web server on port `80`.
+- Reachable as `http://f1.local` via mDNS (`MDNS_HOSTNAME`, `_http._tcp` service advertised); the same name is set as the DHCP hostname.
 - Root UI is embedded in firmware (`INDEX_HTML` in PROGMEM).
 - ElegantOTA mounted at `/update`.
 

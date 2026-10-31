@@ -1,7 +1,7 @@
 # F1 CYD Notifications
 
 <!-- Note: Update version badge below when FIRMWARE_VERSION changes in include/config.h -->
-![Version](https://img.shields.io/badge/version-0.8.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.9.0-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-ESP32-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
 
@@ -122,7 +122,7 @@ pio device monitor -b 115200
 2. Connect and provide Wi-Fi credentials
 3. Optionally set timezone + Telegram token/chat in portal
 4. Device re-joins network and prints IP on serial
-5. Open `http://<device-ip>/` for full config UI
+5. Open `http://f1.local/` (or `http://<device-ip>/`) for full config UI
 
 ## TFT Screens
 
@@ -283,7 +283,9 @@ Winners and standings come from the Jolpica F1 API and are fetched by the browse
 
 ## Web UI and API
 
-Base URL: `http://<device-ip>/`
+Base URL: `http://f1.local/` or `http://<device-ip>/`
+
+The device announces itself over mDNS as `f1.local` and registers `f1` as its DHCP hostname, so routers that publish DHCP names also resolve it (e.g. `f1.localdomain`). `.local` names work on macOS, iOS, Linux and Windows 10+; some Android devices don't support them, so use the IP shown on the boot screen there. The name is `MDNS_HOSTNAME` in `include/config.h` – give each device a different one if you run more than one on the same network.
 
 - `GET /` web UI (Schedule, Settings, System / Diagnostics)
 - `GET /update` OTA page

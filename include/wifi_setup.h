@@ -1,6 +1,7 @@
 #pragma once
 
 #include <WiFiManager.h>
+#include <ESPmDNS.h>
 #include "config.h"
 #include "types.h"
 #include "debug.h"
@@ -43,6 +44,7 @@ bool setupWiFi(AppConfig& cfg) {
     wm.addParameter(wmChatParam);
 
     wm.setSaveParamsCallback(wmSaveParamsCallback);
+    wm.setHostname(MDNS_HOSTNAME);  // Router lists the device as "f1" (e.g. f1.localdomain)
 
     DBG_INFO("[WiFi] Starting WiFiManager (AP: %s, timeout: %ds)", WIFI_AP_NAME, WIFI_TIMEOUT_SEC);
 #if IMPROV_SETUP_ENABLED
@@ -68,6 +70,13 @@ bool setupWiFi(AppConfig& cfg) {
     if (connected) {
         DBG_INFO("[WiFi] Connected. IP: %s, RSSI: %d dBm",
                  WiFi.localIP().toString().c_str(), WiFi.RSSI());
+        // mDNS re-announces by itself after a WiFi reconnect (IDF mdns handles netif events)
+        if (MDNS.begin(MDNS_HOSTNAME)) {
+            MDNS.addService("http", "tcp", 80);
+            DBG_INFO("[WiFi] mDNS: http://%s.local", MDNS_HOSTNAME);
+        } else {
+            DBG_WARN("[WiFi] mDNS start failed - use the IP address");
+        }
     } else {
         DBG_ERROR("[WiFi] Failed to connect - restarting");
         ESP.restart();
