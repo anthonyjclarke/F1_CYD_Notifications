@@ -130,13 +130,18 @@ Endpoints:
 - `POST /api/telegram/resend` queue a resend of the last successfully sent Telegram message (`202`).
 - `GET /api/status` heap, uptime, IP, LDR, plus the Hardware & Diagnostics fields: firmware version, build time, running partition, Arduino core / IDF, board, chip, flash size, device name, MAC, SD state, WiFi SSID/RSSI, NTP sync state and server, local time, last reset reason, minimum heap / largest block, LittleFS usage, current race and cached results round.
 - `GET /api/schedule` current race sessions with local day/time and UTC.
-- `GET /api/races` compact upcoming season list.
+- `GET /api/races` compact season list (every round, past and future).
 - `GET /api/debug` get runtime debug level.
 - `POST /api/debug` set runtime debug level (0-4).
 - `POST /api/screenshot` queue screenshot capture (SD or RAM depending on SD availability).
 - `GET /api/screenshot/status` poll capture state: `{sd_ready, ram_ready, busy, lastPath, lastError}`.
 - `GET /api/screenshot/download?file=<name>` download named BMP from SD.
 - `GET /api/screenshot/download?ram=1` download RAM-captured BMP.
+
+Schedule tab, 2026 season panel:
+- Four tabs: Calendar (upcoming rounds), Completed races (with winner), Driver standings, Constructor standings.
+- Winners and standings are fetched by the browser directly from Jolpica (`/2026/results/1.json`, `/2026/driverStandings.json`, `/2026/constructorStandings.json`; CORS-enabled). The device makes no request for them.
+- Standings tables list the full field (position, name, team, wins, points) with a footnote giving the round they are after; they reload on Refresh. A failed fetch shows "Load failed" in that table only.
 
 ### 2.8 Screenshot Capture
 - Saves TFT captures as 24-bit BMP files to SD folder `/shots` when SD card is present.
@@ -219,6 +224,7 @@ Defaults when config missing/invalid:
 - Device refreshes schedule daily and retries results after race.
 - Device persists user config and notification bitmask.
 - Web UI can read/update config and show live status/schedule data.
+- Web UI shows the season calendar, completed races with winners, and driver and constructor standings.
 - Web UI can test Telegram credentials and resend the last successfully sent Telegram message.
 - Debug level can be changed at runtime.
 - OTA endpoint is reachable on local network.

@@ -166,22 +166,48 @@ footer a{color:var(--muted)}
 
 <section class="panel">
   <p class="eyebrow">2026 season</p>
+  <nav class="actions" style="margin-bottom:12px">
+    <button type="button" class="tab active" id="sbtn-cal" onclick="showSeasonTab('cal')">Calendar</button>
+    <button type="button" class="tab" id="sbtn-done" onclick="showSeasonTab('done')">Completed races</button>
+    <button type="button" class="tab" id="sbtn-drv" onclick="showSeasonTab('drv')">Driver standings</button>
+    <button type="button" class="tab" id="sbtn-con" onclick="showSeasonTab('con')">Constructor standings</button>
+  </nav>
+
+  <div id="season-cal">
   <h2>Calendar</h2>
   <div class="table-wrap"><table id="seasonTable">
     <thead><tr><th>Rd</th><th>Grand Prix</th><th>Location</th><th>Date</th></tr></thead>
     <tbody id="seasonBody"><tr><td colspan="4" class="muted">Loading&hellip;</td></tr></tbody>
   </table></div>
   <p class="footnote">Dates are in this browser's timezone.</p>
-</section>
+  </div>
 
-<section class="panel">
-  <p class="eyebrow">2026 season</p>
+  <div id="season-done" hidden>
   <h2>Completed races</h2>
   <div class="table-wrap"><table id="doneTable">
     <thead><tr><th>Rd</th><th>Grand Prix</th><th>Location</th><th>Date</th><th>Winner</th></tr></thead>
     <tbody id="doneBody"><tr><td colspan="5" class="muted">Loading&hellip;</td></tr></tbody>
   </table></div>
   <p class="footnote">Winners from the Jolpica F1 API; each links to the full race results.</p>
+  </div>
+
+  <div id="season-drv" hidden>
+  <h2>Driver standings</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Pos</th><th>Driver</th><th>Team</th><th class="r">Wins</th><th class="r">Points</th></tr></thead>
+    <tbody id="drvBody"><tr><td colspan="5" class="muted">Loading&hellip;</td></tr></tbody>
+  </table></div>
+  <p class="footnote" id="drvNote">Standings from the Jolpica F1 API.</p>
+  </div>
+
+  <div id="season-con" hidden>
+  <h2>Constructor standings</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Pos</th><th>Constructor</th><th class="r">Wins</th><th class="r">Points</th></tr></thead>
+    <tbody id="conBody"><tr><td colspan="4" class="muted">Loading&hellip;</td></tr></tbody>
+  </table></div>
+  <p class="footnote" id="conNote">Standings from the Jolpica F1 API.</p>
+  </div>
 </section>
 </div>
 
@@ -316,6 +342,14 @@ function showTab(t) {
   history.replaceState(null, '', '#' + t);
 }
 
+const SEASON_TABS = ['cal', 'done', 'drv', 'con'];
+function showSeasonTab(t) {
+  SEASON_TABS.forEach(k => {
+    $('season-' + k).hidden = k !== t;
+    $('sbtn-' + k).classList.toggle('active', k === t);
+  });
+}
+
 // Status bar can be dismissed while healthy; remembered per browser
 let statusDismissed = false;
 try { statusDismissed = localStorage.getItem('f1StatusHidden') === '1'; } catch(e) {}
@@ -330,6 +364,7 @@ function refreshAll() {
   loadStatus();
   loadSchedule();
   loadRaces();
+  loadStandings();
 }
 
 async function renderLogo() {
@@ -734,6 +769,49 @@ async function loadRaces() {
   }
 }
 
+// Driver + constructor standings, fetched by the browser from Jolpica (same as winners above)
+const numCell = v => '<td class="cd">' + v + '</td>';
+
+async function loadStandingsList(kind) {
+  const r = await fetch('https://api.jolpi.ca/ergast/f1/2026/' + kind + 'Standings.json?limit=30');
+  const d = await r.json();
+  return d.MRData.StandingsTable.StandingsLists[0] || null;
+}
+
+function standingsNote(list) {
+  return 'After round ' + list.round + '. Standings from the Jolpica F1 API.';
+}
+
+async function loadStandings() {
+  try {
+    const list = await loadStandingsList('driver');
+    const tb = $('drvBody');
+    if (!list) { tb.innerHTML = '<tr><td colspan="5" class="muted">No standings yet</td></tr>'; }
+    else {
+      tb.innerHTML = list.DriverStandings.map(s =>
+        '<tr><td>' + s.positionText + '</td>' +
+        '<td><a href="' + s.Driver.url + '" target="_blank" rel="noopener">' +
+          s.Driver.givenName + ' ' + s.Driver.familyName + '</a></td>' +
+        '<td class="muted">' + s.Constructors.map(c => c.name).join(' / ') + '</td>' +
+        numCell(s.wins) + numCell(s.points) + '</tr>').join('');
+      $('drvNote').textContent = standingsNote(list);
+    }
+  } catch(e) { $('drvBody').innerHTML = '<tr><td colspan="5" class="muted">Load failed</td></tr>'; }
+
+  try {
+    const list = await loadStandingsList('constructor');
+    const tb = $('conBody');
+    if (!list) { tb.innerHTML = '<tr><td colspan="4" class="muted">No standings yet</td></tr>'; }
+    else {
+      tb.innerHTML = list.ConstructorStandings.map(s =>
+        '<tr><td>' + s.positionText + '</td>' +
+        '<td><a href="' + s.Constructor.url + '" target="_blank" rel="noopener">' + s.Constructor.name + '</a></td>' +
+        numCell(s.wins) + numCell(s.points) + '</tr>').join('');
+      $('conNote').textContent = standingsNote(list);
+    }
+  } catch(e) { $('conBody').innerHTML = '<tr><td colspan="4" class="muted">Load failed</td></tr>'; }
+}
+
 // Populate timezone and NTP server select options
 function populateSelects() {
   const tzOpts = [
@@ -780,6 +858,7 @@ loadStatus();
 loadDebug();
 loadSchedule();
 loadRaces();
+loadStandings();
 setInterval(loadStatus, 10000);
 setInterval(updateCountdowns, 1000);
 </script>

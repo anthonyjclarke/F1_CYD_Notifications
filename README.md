@@ -246,15 +246,32 @@ Each notification is sent once per race: a bitmask saved to config right after e
 
 A light, single-page UI with three tabs. The status bar under the header shows connection, firmware version and NTP state, refreshed every 10 s.
 
-- **Schedule** – cards for the next session (live countdown), Grand Prix time and races left; the post-race podium; this weekend's sessions; the season calendar.
+- **Schedule** – cards for the next session (live countdown), Grand Prix time and races left; the post-race podium; this weekend's sessions; and the 2026 season panel (below).
 - **Settings** – timezone and NTP server, display brightness (0 = auto), Telegram bot token and chat ID with test / resend.
 - **System / Diagnostics** – firmware, network, hardware, system and F1-data panels, plus OTA update, TFT screenshot and serial debug level.
 
 The open tab is kept in the URL (`/#sch`, `/#cfg`, `/#diag`). The status bar can be dismissed with ×; it reappears by itself if the device is unreachable or NTP isn't synced.
 
+The **2026 season** panel at the bottom of the Schedule tab has four tabs:
+
+- **Calendar** – upcoming rounds; the current race is highlighted.
+- **Completed races** – past rounds with the winner, linked to the full race results.
+- **Driver standings** – position, driver, team, wins and points for the whole grid.
+- **Constructor standings** – position, team, wins and points.
+
+Winners and standings come from the Jolpica F1 API and are fetched by the browser, not the device, so they add no load or memory use on the ESP32. They reload with **Refresh**. A footnote shows which round the standings are after.
+
 ### Schedule
 
 ![Web UI Schedule](./images/WebUI_Schedule.jpg)
+
+### Driver standings
+
+![Web UI Driver standings](./images/WebUI_Drivers.jpg)
+
+### Constructor standings
+
+![Web UI Constructor standings](./images/WebUI_Constructors.jpg)
 
 ### Settings
 
@@ -278,7 +295,7 @@ Base URL: `http://<device-ip>/`
 - `POST /api/telegram/resend` resend the last successfully sent Telegram message
 - `GET /api/status` heap/uptime/IP and the Hardware & Diagnostics panel data
 - `GET /api/schedule` current race sessions
-- `GET /api/races` upcoming rounds list
+- `GET /api/races` all season rounds, past and future
 - `GET /api/debug` get debug level
 - `POST /api/debug` set debug level (0..4)
 - `POST /api/screenshot` queue TFT screenshot capture (SD card or RAM fallback)
