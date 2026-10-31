@@ -17,7 +17,7 @@ Version scheme: `MAJOR.MINOR.PATCH`
 
 ## [Unreleased]
 
-## [0.9.0] Unreleased
+## [0.9.0] 01-11-2026
 
 ### Added
 - Web UI **Driver standings** and **Constructor standings** tabs in the 2026 season panel (position, driver/team, wins, points), fetched by the browser directly from the Jolpica API and refreshed with the Refresh button.
